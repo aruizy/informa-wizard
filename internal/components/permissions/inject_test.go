@@ -131,7 +131,7 @@ func TestInjectClaudeCodeUsesBypassPermissions(t *testing.T) {
 	}
 }
 
-func TestInjectGeminiCLIUsesYoloMode(t *testing.T) {
+func TestInjectGeminiCLIUsesAutoEditMode(t *testing.T) {
 	home := t.TempDir()
 
 	result, err := Inject(home, geminiAdapter())
@@ -159,8 +159,8 @@ func TestInjectGeminiCLIUsesYoloMode(t *testing.T) {
 	}
 
 	mode, ok := general["defaultApprovalMode"].(string)
-	if !ok || mode != "yolo" {
-		t.Fatalf("expected defaultApprovalMode=yolo, got %q", mode)
+	if !ok || mode != "auto_edit" {
+		t.Fatalf("expected defaultApprovalMode=auto_edit, got %q", mode)
 	}
 
 	// Ensure no Claude Code keys leaked

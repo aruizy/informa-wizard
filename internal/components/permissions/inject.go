@@ -53,10 +53,10 @@ var openCodeOverlayJSON = []byte(`{
 }
 `)
 
-// geminiCLIOverlayJSON sets Gemini CLI to "yolo" mode (auto-approve all tool calls).
+// geminiCLIOverlayJSON sets Gemini CLI to "auto_edit" mode (auto-approve edit tools).
 var geminiCLIOverlayJSON = []byte(`{
   "general": {
-    "defaultApprovalMode": "yolo"
+    "defaultApprovalMode": "auto_edit"
   }
 }
 `)
