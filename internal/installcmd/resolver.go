@@ -81,6 +81,8 @@ func (profileResolver) ResolveDependencyInstall(profile system.PlatformProfile, 
 		return CommandSequence{{"sudo", "apt-get", "install", "-y", dependency}}, nil
 	case "pacman":
 		return CommandSequence{{"sudo", "pacman", "-S", "--noconfirm", dependency}}, nil
+	case "dnf":
+		return CommandSequence{{"sudo", "dnf", "install", "-y", dependency}}, nil
 	case "winget":
 		return CommandSequence{{"winget", "install", "--id", dependency, "-e", "--accept-source-agreements", "--accept-package-agreements"}}, nil
 	default:
@@ -103,7 +105,7 @@ func resolveOpenCodeInstall(profile system.PlatformProfile) (CommandSequence, er
 		return CommandSequence{
 			{"brew", "install", "anomalyco/tap/opencode"},
 		}, nil
-	case "apt", "pacman":
+	case "apt", "pacman", "dnf":
 		if profile.NpmWritable {
 			return CommandSequence{{"npm", "install", "-g", "opencode-ai"}}, nil
 		}
@@ -129,7 +131,7 @@ func resolveGGAInstall(profile system.PlatformProfile) (CommandSequence, error) 
 			{"brew", "tap", "Gentleman-Programming/homebrew-tap"},
 			{"brew", "install", "gga"},
 		}, nil
-	case "apt", "pacman":
+	case "apt", "pacman", "dnf":
 		const tmpDir = "/tmp/gentleman-guardian-angel"
 		return CommandSequence{
 			{"rm", "-rf", tmpDir},
@@ -267,7 +269,7 @@ func resolveEngramInstall(profile system.PlatformProfile) (CommandSequence, erro
 			{"brew", "tap", "Gentleman-Programming/homebrew-tap"},
 			{"brew", "install", "engram"},
 		}, nil
-	case "apt", "pacman":
+	case "apt", "pacman", "dnf":
 		if err := validateGoForModuleInstall(profile); err != nil {
 			return nil, err
 		}

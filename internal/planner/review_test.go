@@ -68,12 +68,12 @@ func TestPlatformDecisionFromProfileMatrix(t *testing.T) {
 			},
 		},
 		{
-			name: "unsupported distro propagates unsupported status",
+			name: "fedora profile maps to dnf decision",
 			profile: system.PlatformProfile{
-				OS: "linux", LinuxDistro: "fedora", Supported: false,
+				OS: "linux", LinuxDistro: system.LinuxDistroFedora, PackageManager: "dnf", Supported: true,
 			},
 			want: PlatformDecision{
-				OS: "linux", LinuxDistro: "fedora", Supported: false,
+				OS: "linux", LinuxDistro: system.LinuxDistroFedora, PackageManager: "dnf", Supported: true,
 			},
 		},
 	}
@@ -93,6 +93,7 @@ func TestBuildReviewPayloadPlatformDecisionPropagatesPerProfile(t *testing.T) {
 		{OS: "darwin", PackageManager: "brew", Supported: true},
 		{OS: "linux", LinuxDistro: "ubuntu", PackageManager: "apt", Supported: true},
 		{OS: "linux", LinuxDistro: "arch", PackageManager: "pacman", Supported: true},
+		{OS: "linux", LinuxDistro: system.LinuxDistroFedora, PackageManager: "dnf", Supported: true},
 	}
 
 	for _, decision := range profiles {
