@@ -17,11 +17,6 @@ type InjectionResult struct {
 	Files   []string
 }
 
-// neutralPersonaContent is a minimal fallback — the real neutral persona is
-// loaded from the embedded asset in personaContent(). This constant is kept
-// only as a safety net if the asset is somehow unavailable.
-const neutralPersonaFallback = "Be helpful, direct, and technically precise. Focus on accuracy and clarity.\n"
-
 // outputStyleOverlayJSON is the settings.json overlay to enable the Gentleman output style.
 var outputStyleOverlayJSON = []byte("{\n  \"outputStyle\": \"Gentleman\"\n}\n")
 
@@ -312,7 +307,7 @@ func readFileOrEmpty(path string) (string, error) {
 func wrapInstructionsFile(content string) string {
 	frontmatter := "---\n" +
 		"name: Gentle AI Persona\n" +
-		"description: Gentleman persona with SDD orchestration and Engram protocol\n" +
+		"description: Teaching-oriented persona with SDD orchestration and Engram protocol\n" +
 		"applyTo: \"**\"\n" +
 		"---\n\n"
 

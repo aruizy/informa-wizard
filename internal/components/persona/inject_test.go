@@ -149,7 +149,7 @@ func TestInjectClaudeGentlemanReturnsAllFiles(t *testing.T) {
 	}
 }
 
-func TestInjectClaudeNeutralWritesMinimalContent(t *testing.T) {
+func TestInjectClaudeNeutralWritesFullPersonaWithoutRegionalLanguage(t *testing.T) {
 	home := t.TempDir()
 
 	result, err := Inject(home, claudeAdapter(), model.PersonaNeutral)
