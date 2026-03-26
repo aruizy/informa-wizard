@@ -36,6 +36,18 @@ func TestAllEmbeddedAssetsAreReadable(t *testing.T) {
 		// Codex agent files
 		"codex/sdd-orchestrator.md",
 
+		// Cursor agent files
+		"cursor/sdd-orchestrator.md",
+		"cursor/agents/sdd-init.md",
+		"cursor/agents/sdd-explore.md",
+		"cursor/agents/sdd-propose.md",
+		"cursor/agents/sdd-spec.md",
+		"cursor/agents/sdd-design.md",
+		"cursor/agents/sdd-tasks.md",
+		"cursor/agents/sdd-apply.md",
+		"cursor/agents/sdd-verify.md",
+		"cursor/agents/sdd-archive.md",
+
 		// SDD skills
 		"skills/sdd-init/SKILL.md",
 		"skills/sdd-apply/SKILL.md",
@@ -234,6 +246,7 @@ func TestSDDOrchestratorAssetsScopedToDedicatedAgent(t *testing.T) {
 		"claude/sdd-orchestrator.md",
 		"gemini/sdd-orchestrator.md",
 		"codex/sdd-orchestrator.md",
+		"cursor/sdd-orchestrator.md",
 	} {
 		t.Run(assetPath, func(t *testing.T) {
 			content := MustRead(assetPath)

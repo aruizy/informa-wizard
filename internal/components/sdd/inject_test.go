@@ -2187,8 +2187,8 @@ func TestInjectWindsurf_WorkflowsFoundFromSubdirectory(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestSDDOrchestratorAssetSelection verifies that sddOrchestratorAsset()
-// returns agent-specific paths for Gemini and Codex, and falls back to generic
-// for all other agents.
+// returns agent-specific paths for agents that have dedicated orchestrators,
+// and falls back to generic for all others.
 func TestSDDOrchestratorAssetSelection(t *testing.T) {
 	tests := []struct {
 		agent model.AgentID
@@ -2198,9 +2198,9 @@ func TestSDDOrchestratorAssetSelection(t *testing.T) {
 		{agent: model.AgentAntigravity, want: "antigravity/sdd-orchestrator.md"},
 		{agent: model.AgentCodex, want: "codex/sdd-orchestrator.md"},
 		{agent: model.AgentWindsurf, want: "windsurf/sdd-orchestrator.md"},
+		{agent: model.AgentCursor, want: "cursor/sdd-orchestrator.md"},
 		{agent: model.AgentClaudeCode, want: "generic/sdd-orchestrator.md"},
 		{agent: model.AgentOpenCode, want: "generic/sdd-orchestrator.md"},
-		{agent: model.AgentCursor, want: "generic/sdd-orchestrator.md"},
 		{agent: model.AgentVSCodeCopilot, want: "generic/sdd-orchestrator.md"},
 	}
 

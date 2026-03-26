@@ -1,4 +1,3 @@
-<!-- gentle-ai:sdd-orchestrator -->
 # Agent Teams Lite — Orchestrator Instructions (Cursor)
 
 Bind this to the dedicated `sdd-orchestrator` agent or rule only. Do NOT apply it to executor phase agents such as `sdd-apply` or `sdd-verify`.
@@ -190,4 +189,3 @@ Convention files under `~/.cursor/skills/_shared/` (global) or `.agent/skills/_s
 - `engram` → `mem_search(...)` → `mem_get_observation(...)`
 - `openspec` → read `openspec/changes/*/state.yaml`
 - `none` → state not persisted — explain to user
-<!-- /gentle-ai:sdd-orchestrator -->

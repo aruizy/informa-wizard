@@ -350,6 +350,45 @@ func Inject(homeDir string, adapter agents.Adapter, sddMode model.SDDModeID, opt
 		}
 	}
 
+	// 3c. Write native sub-agent files (Cursor, and any future agent that
+	// implements the subAgentInjector optional interface). Sub-agent files are
+	// written to the user's home directory (e.g. ~/.cursor/agents/), not to the
+	// workspace, so no project-root detection is needed here.
+	type subAgentInjector interface {
+		SupportsSubAgents() bool
+		SubAgentsDir(homeDir string) string
+		EmbeddedSubAgentsDir() string
+	}
+
+	if sai, ok := adapter.(subAgentInjector); ok && sai.SupportsSubAgents() {
+		agentsDir := sai.SubAgentsDir(homeDir)
+		if err := os.MkdirAll(agentsDir, 0o755); err != nil {
+			return InjectionResult{}, fmt.Errorf("create agents dir: %w", err)
+		}
+
+		embeddedDir := sai.EmbeddedSubAgentsDir()
+		entries, err := assets.FS.ReadDir(embeddedDir)
+		if err != nil {
+			return InjectionResult{}, fmt.Errorf("read embedded agents dir: %w", err)
+		}
+
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+				continue
+			}
+			content := assets.MustRead(embeddedDir + "/" + entry.Name())
+			outPath := filepath.Join(agentsDir, entry.Name())
+			writeResult, err := filemerge.WriteFileAtomic(outPath, []byte(content), 0o644)
+			if err != nil {
+				return InjectionResult{}, fmt.Errorf("write agent %s: %w", entry.Name(), err)
+			}
+			if writeResult.Changed {
+				files = append(files, outPath)
+				changed = true
+			}
+		}
+	}
+
 	// 4. Post-injection verification — catch silent failures.
 	// Validate against the in-memory merged bytes rather than re-reading from
 	// disk to avoid false negatives on Windows/WSL2 where a freshly-renamed
@@ -632,6 +671,8 @@ func sddOrchestratorAsset(agent model.AgentID) string {
 		return "antigravity/sdd-orchestrator.md"
 	case model.AgentWindsurf:
 		return "windsurf/sdd-orchestrator.md"
+	case model.AgentCursor:
+		return "cursor/sdd-orchestrator.md"
 	default:
 		return "generic/sdd-orchestrator.md"
 	}
