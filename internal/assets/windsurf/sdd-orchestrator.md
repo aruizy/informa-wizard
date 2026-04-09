@@ -77,28 +77,62 @@ Native Windsurf Workflow: `/sdd-new` is also available as a native Windsurf work
 
 ### Execution Mode
 
-When the user invokes `/sdd-new`, `/sdd-ff`, or `/sdd-continue` for the first time in a session, ASK which execution mode they prefer:
+The orchestrator supports three execution modes. The user selects one when starting a change.
 
-- **Automatic** (`auto`): Run all phases sequentially without pausing. Show the final result only. Use this when the user wants speed and trusts the process.
-- **Interactive** (`interactive`): After each phase completes, show the result summary and ASK: "Want to adjust anything or continue?" before proceeding to the next phase. Use this when the user wants to review and steer each step.
-- **Plan-Build** (`plan-build`): Planning phases (explore, propose, spec, design, tasks) run interactively — pause after each for review. Build phases (apply, verify, archive) run automatically back-to-back. Best balance: steer the plan, then let it execute.
+| Mode | Behavior | When to Use |
+|------|----------|-------------|
+| **plan-build** (default) | Definition phases run continuously — only pause on HALT CONDITIONS. Always stop at PRE-IMPLEMENTATION GATE before apply. Build phases run sequentially after approval. | Most changes — gives the user control with minimal interruption |
+| **interactive** | Pause after each phase, show result, ask for confirmation before proceeding. | New users learning SDD, or high-risk changes needing per-phase review |
+| **automatic** | Run all phases sequentially without pausing (except at PRE-IMPLEMENTATION GATE). Report a combined summary at the end. | Well-understood changes where the user trusts the pipeline |
 
-If the user doesn't specify, default to **Interactive** (safer, gives the user control).
+If no mode is specified, default to **plan-build**.
 
 Cache the mode choice for the session — don't ask again unless the user explicitly requests a mode change.
 
-In **Interactive** mode, between phases:
-1. Show a concise summary of what the phase produced
-2. List what the next phase will do
-3. Ask: "¿Seguimos? / Continue?" — accept YES/continue, NO/stop, or specific feedback to adjust
-4. If the user gives feedback, incorporate it before running the next phase
+### Flow Control — Continuous by Default (plan-build & automatic)
 
-In **Plan-Build** mode:
-- Planning phases (explore → propose → spec → design → tasks): behave like Interactive — pause after each, show summary, ask before continuing
-- Build phases (apply → verify → archive): behave like Automatic — run back-to-back without pausing once the first build phase starts
-- At the transition point (after tasks completes), show a final plan summary and confirm: "Plan complete. Proceeding to build phases without pausing. ¿Arrancamos? / Start build?" — accept YES/start or specific feedback. Once confirmed, run all remaining build phases automatically.
+The orchestrator runs DEFINITION phases (propose → spec → design → tasks) CONTINUOUSLY without pausing between them, UNLESS one of the following HALT CONDITIONS is met:
 
-For this agent (solo inline execution): **Interactive** is already the natural behavior — you pause between phases via Windsurf's Approval Gates. **Automatic** means skip the "Approve to proceed?" gates and run all phases sequentially without stopping. **Plan-Build** means use Approval Gates during planning phases but skip them for build phases after the transition confirmation.
+**HALT CONDITIONS** (only these justify stopping during definition phases):
+1. **AMBIGUITY** — The sub-agent reports unclear requirements, multiple valid interpretations, or missing information that only the user can clarify
+2. **RISK** — The sub-agent flags a high-risk decision (breaking change, data migration, security concern, irreversible action) that requires explicit user sign-off
+3. **FAILURE** — A phase fails (spec conflicts detected, design inconsistency) and the resolution path is not obvious
+4. **DECISION FORK** — There are 2+ viable approaches with meaningful trade-offs that the user should choose between
+5. **SCOPE CHANGE** — The sub-agent discovers the change is significantly larger or different than originally described
+
+If NONE of these conditions are met → proceed immediately to the next phase without asking.
+
+When a halt IS triggered, present it as a **STRUCTURED FORM**:
+- Brief context of what was completed
+- The specific question or decision needed
+- Selectable options when applicable (e.g., "Option A: …", "Option B: …", "Option C: Other")
+- NEVER free-form open questions if options can be enumerated
+
+### PRE-IMPLEMENTATION GATE
+
+When ALL definition phases are complete and the next step is implementation (apply), the orchestrator MUST ALWAYS stop and present:
+
+1. **Plan summary**: concise overview of what will be implemented — key changes, files affected, task count, estimated scope
+2. **Decision form** with options:
+   - "Looks good, proceed with implementation"
+   - "I want to adjust something in the plan"
+   - "Redo a specific phase" (then ask which: proposal / spec / design / tasks)
+   - "Save for later, don't implement now"
+
+Do NOT begin implementation until the user explicitly selects to proceed.
+This gate applies even during **automatic** mode and `/sdd-ff` — fast-forward runs all definition phases continuously but ALWAYS stops at this gate before apply.
+
+### Sub-Agent Output Evaluation
+
+After each phase completes, evaluate for HALT CONDITIONS:
+1. If NONE detected → proceed immediately to the next phase
+2. If detected → stop, present as structured form with selectable options, wait for resolution
+3. After resolution → resume pipeline
+4. When all definition phases complete → trigger PRE-IMPLEMENTATION GATE
+
+In **interactive** mode: ignore flow control — always pause after each phase, show result, ask "¿Seguimos? / Continue?" before proceeding.
+
+For this agent (solo inline execution): definition phases run sequentially without stopping unless a halt condition is detected. Evaluate each phase's output before starting the next. Windsurf Approval Gates are used only in interactive mode.
 
 ### Artifact Store Mode
 

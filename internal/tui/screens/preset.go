@@ -9,7 +9,7 @@ import (
 
 func PresetOptions() []model.PresetID {
 	return []model.PresetID{
-		model.PresetFullGentleman,
+		model.PresetFull,
 		model.PresetEcosystemOnly,
 		model.PresetMinimal,
 		model.PresetCustom,
@@ -17,7 +17,7 @@ func PresetOptions() []model.PresetID {
 }
 
 var presetDescriptions = map[model.PresetID]string{
-	model.PresetFullGentleman: "Everything: memory, SDD, skills, docs & security",
+	model.PresetFull: "Everything: memory, SDD, skills, docs & security",
 	model.PresetEcosystemOnly: "Core tools only: memory, SDD, skills & docs",
 	model.PresetMinimal:       "Just Engram persistent memory",
 	model.PresetCustom:        "Pick individual components yourself",

@@ -73,11 +73,11 @@ func normalizePersona(value string) (model.PersonaID, error) {
 
 func normalizePreset(value string) (model.PresetID, error) {
 	if strings.TrimSpace(value) == "" {
-		return model.PresetFullGentleman, nil
+		return model.PresetFull, nil
 	}
 
 	switch model.PresetID(value) {
-	case model.PresetFullGentleman, model.PresetEcosystemOnly, model.PresetMinimal, model.PresetCustom:
+	case model.PresetFull, model.PresetEcosystemOnly, model.PresetMinimal, model.PresetCustom:
 		return model.PresetID(value), nil
 	default:
 		return "", fmt.Errorf("unsupported preset %q", value)

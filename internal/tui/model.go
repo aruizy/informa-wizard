@@ -192,6 +192,7 @@ const (
 	ScreenAgentBuilderPreview
 	ScreenAgentBuilderInstalling
 	ScreenAgentBuilderComplete
+	ScreenMonday
 )
 
 type Model struct {
@@ -239,6 +240,13 @@ type Model struct {
 
 	// BackupRenamePos is the cursor position within BackupRenameText.
 	BackupRenamePos int
+
+	// Monday.com configuration input state.
+	MondayTokenInput   string
+	MondayTokenPos     int
+	MondayBoardInput   string
+	MondayBoardPos     int
+	MondayActiveField  screens.MondayField
 
 	// ExecuteFn is called to run the real pipeline. When nil, the installing
 	// screen falls back to manual step-through (useful for tests/development).
@@ -334,8 +342,8 @@ func NewModel(detection system.DetectionResult, version string) Model {
 	selection := model.Selection{
 		Agents:     preselectedAgents(detection),
 		Persona:    model.PersonaCustom,
-		Preset:     model.PresetFullGentleman,
-		Components: componentsForPreset(model.PresetFullGentleman),
+		Preset:     model.PresetFull,
+		Components: componentsForPreset(model.PresetFull),
 	}
 
 	return Model{
@@ -475,6 +483,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if m.Screen == ScreenRenameBackup {
 			return m.handleRenameInput(msg)
+		}
+		if m.Screen == ScreenMonday {
+			return m.handleMondayInput(msg)
 		}
 		if m.Screen == ScreenProfileCreate && m.ProfileCreateStep == 0 && !m.ProfileEditMode {
 			return m.handleProfileNameInput(msg)
@@ -627,6 +638,8 @@ func (m Model) View() string {
 		return screens.RenderDependencyTree(m.DependencyPlan, m.Selection, m.Cursor)
 	case ScreenSkillPicker:
 		return screens.RenderSkillPicker(m.SkillPicker, m.Cursor)
+	case ScreenMonday:
+		return screens.RenderMonday(m.MondayTokenInput, m.MondayBoardInput, m.MondayActiveField, mondayCursorPos(m))
 	case ScreenReview:
 		return screens.RenderReview(m.Review, m.Cursor)
 	case ScreenInstalling:
@@ -730,8 +743,7 @@ func (m Model) handleKeyPress(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 						}
 						m.setScreen(ScreenSkillPicker)
 					} else {
-						m.Review = planner.BuildReviewPayload(m.Selection, m.DependencyPlan)
-						m.setScreen(ScreenReview)
+						m.goToReviewOrMonday()
 					}
 				} else if m.shouldShowStrictTDDScreen() {
 					m.setScreen(ScreenStrictTDD)
@@ -1192,8 +1204,7 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 					}
 					m.setScreen(ScreenSkillPicker)
 				} else {
-					m.Review = planner.BuildReviewPayload(m.Selection, m.DependencyPlan)
-					m.setScreen(ScreenReview)
+					m.goToReviewOrMonday()
 				}
 			} else {
 				m.buildDependencyPlan()
@@ -1264,8 +1275,7 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 					}
 					m.setScreen(ScreenSkillPicker)
 				} else {
-					m.Review = planner.BuildReviewPayload(m.Selection, m.DependencyPlan)
-					m.setScreen(ScreenReview)
+					m.goToReviewOrMonday()
 				}
 			} else {
 				// Continue -> check StrictTDD before dependency tree.
@@ -1303,8 +1313,7 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 					}
 					m.setScreen(ScreenSkillPicker)
 				} else {
-					m.Review = planner.BuildReviewPayload(m.Selection, m.DependencyPlan)
-					m.setScreen(ScreenReview)
+					m.goToReviewOrMonday()
 				}
 			} else {
 				m.buildDependencyPlan()
@@ -1361,16 +1370,14 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 					m.setScreen(ScreenSkillPicker)
 					return m, nil
 				}
-				m.Review = planner.BuildReviewPayload(m.Selection, m.DependencyPlan)
-				m.setScreen(ScreenReview)
+				m.goToReviewOrMonday()
 			default:
 				m.setScreen(ScreenPreset)
 			}
 			return m, nil
 		}
 		if m.Cursor == 0 {
-			m.Review = planner.BuildReviewPayload(m.Selection, m.DependencyPlan)
-			m.setScreen(ScreenReview)
+			m.goToReviewOrMonday()
 			return m, nil
 		}
 		// NOTE: Back logic also in goBack() — keep in sync.
@@ -1402,8 +1409,7 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			// "Continue" — store selected skills into Selection and proceed to review.
 			m.Selection.Skills = make([]model.SkillID, len(m.SkillPicker))
 			copy(m.Selection.Skills, m.SkillPicker)
-			m.Review = planner.BuildReviewPayload(m.Selection, m.DependencyPlan)
-			m.setScreen(ScreenReview)
+			m.goToReviewOrMonday()
 		default:
 			// "Back" — in custom preset, return to the screen that preceded SkillPicker.
 			if m.Selection.Preset == model.PresetCustom {
@@ -1429,6 +1435,13 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 				m.setScreen(ScreenDependencyTree)
 			}
 		}
+	case ScreenMonday:
+		// Enter on Monday screen: save inputs and proceed to Review.
+		m.Selection.Monday.Token = m.MondayTokenInput
+		m.Selection.Monday.BoardID = m.MondayBoardInput
+		m.Review = planner.BuildReviewPayload(m.Selection, m.DependencyPlan)
+		m.setScreen(ScreenReview)
+		return m, nil
 	case ScreenReview:
 		if m.Cursor == 0 {
 			return m.startInstalling()
@@ -2033,6 +2046,86 @@ func (m Model) handleRenameInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEnter:
+		// Save inputs and proceed to Review.
+		m.Selection.Monday.Token = m.MondayTokenInput
+		m.Selection.Monday.BoardID = m.MondayBoardInput
+		m.Review = planner.BuildReviewPayload(m.Selection, m.DependencyPlan)
+		m.setScreen(ScreenReview)
+		return m, nil
+	case tea.KeyEsc:
+		m.setScreen(ScreenDependencyTree)
+		return m, nil
+	case tea.KeyTab:
+		// Switch between token and board ID fields.
+		if m.MondayActiveField == screens.MondayFieldToken {
+			m.MondayActiveField = screens.MondayFieldBoardID
+		} else {
+			m.MondayActiveField = screens.MondayFieldToken
+		}
+		return m, nil
+	case tea.KeyBackspace:
+		if m.MondayActiveField == screens.MondayFieldToken {
+			if m.MondayTokenPos > 0 {
+				runes := []rune(m.MondayTokenInput)
+				m.MondayTokenInput = string(append(runes[:m.MondayTokenPos-1], runes[m.MondayTokenPos:]...))
+				m.MondayTokenPos--
+			}
+		} else {
+			if m.MondayBoardPos > 0 {
+				runes := []rune(m.MondayBoardInput)
+				m.MondayBoardInput = string(append(runes[:m.MondayBoardPos-1], runes[m.MondayBoardPos:]...))
+				m.MondayBoardPos--
+			}
+		}
+		return m, nil
+	case tea.KeyLeft:
+		if m.MondayActiveField == screens.MondayFieldToken {
+			if m.MondayTokenPos > 0 {
+				m.MondayTokenPos--
+			}
+		} else {
+			if m.MondayBoardPos > 0 {
+				m.MondayBoardPos--
+			}
+		}
+		return m, nil
+	case tea.KeyRight:
+		if m.MondayActiveField == screens.MondayFieldToken {
+			if m.MondayTokenPos < len([]rune(m.MondayTokenInput)) {
+				m.MondayTokenPos++
+			}
+		} else {
+			if m.MondayBoardPos < len([]rune(m.MondayBoardInput)) {
+				m.MondayBoardPos++
+			}
+		}
+		return m, nil
+	case tea.KeyRunes:
+		if m.MondayActiveField == screens.MondayFieldToken {
+			runes := []rune(m.MondayTokenInput)
+			newRunes := make([]rune, 0, len(runes)+len(msg.Runes))
+			newRunes = append(newRunes, runes[:m.MondayTokenPos]...)
+			newRunes = append(newRunes, msg.Runes...)
+			newRunes = append(newRunes, runes[m.MondayTokenPos:]...)
+			m.MondayTokenInput = string(newRunes)
+			m.MondayTokenPos += len(msg.Runes)
+		} else {
+			runes := []rune(m.MondayBoardInput)
+			newRunes := make([]rune, 0, len(runes)+len(msg.Runes))
+			newRunes = append(newRunes, runes[:m.MondayBoardPos]...)
+			newRunes = append(newRunes, msg.Runes...)
+			newRunes = append(newRunes, runes[m.MondayBoardPos:]...)
+			m.MondayBoardInput = string(newRunes)
+			m.MondayBoardPos += len(msg.Runes)
+		}
+		return m, nil
+	}
+	return m, nil
+}
+
 func (m Model) optionCount() int {
 	switch m.Screen {
 	case ScreenWelcome:
@@ -2075,6 +2168,8 @@ func (m Model) optionCount() int {
 		return len(screens.DependencyTreeOptions())
 	case ScreenSkillPicker:
 		return screens.SkillPickerOptionCount()
+	case ScreenMonday:
+		return 0 // text input mode — no cursor navigation
 	case ScreenReview:
 		return len(screens.ReviewOptions())
 	case ScreenInstalling:
@@ -2306,6 +2401,28 @@ func (m Model) shouldShowSDDModeScreen() bool {
 // selected — the screen is agent-agnostic.
 func (m Model) shouldShowStrictTDDScreen() bool {
 	return hasSelectedComponent(m.Selection.Components, model.ComponentSDD)
+}
+
+func (m Model) shouldShowMondayScreen() bool {
+	return hasSelectedComponent(m.Selection.Components, model.ComponentMonday)
+}
+
+// goToReviewOrMonday navigates to the Monday config screen if the Monday
+// component is selected and no token has been entered yet, otherwise goes
+// directly to Review.
+func (m *Model) goToReviewOrMonday() {
+	if m.shouldShowMondayScreen() && m.MondayTokenInput == "" {
+		m.setScreen(ScreenMonday)
+		return
+	}
+	m.goToReviewOrMonday()
+}
+
+func mondayCursorPos(m Model) int {
+	if m.MondayActiveField == screens.MondayFieldToken {
+		return m.MondayTokenPos
+	}
+	return m.MondayBoardPos
 }
 
 func (m Model) shouldShowClaudeModelPickerScreen() bool {

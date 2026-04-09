@@ -11,7 +11,12 @@
       "Bash(do sed:*)",
       "Bash(done)",
       "Bash(python:*)",
-      "Bash(go install:*)"
+      "Bash(go install:*)",
+      "Bash(go env:*)",
+      "Read(//tmp/**)",
+      "Read(//c/tmp/**)",
+      "Read(//c/Users/aruiz/AppData/Local/Temp/dev-orchestrators/sdd-orchestrator/**)",
+      "Read(//c/GIT/informa-wizard/$TEMP/dev-orchestrators/sdd-orchestrator/**)"
     ]
   }
 }

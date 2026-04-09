@@ -30,7 +30,7 @@ var foundationSkills = []model.SkillID{
 //
 //   - "minimal" / PresetMinimal:       SDD skills only
 //   - "ecosystem-only" / PresetEcosystemOnly: SDD + common framework skills
-//   - "full-gentleman" / PresetFullGentleman: all available skills
+//   - "full" / PresetFull: all available skills
 //   - "custom" / PresetCustom:         empty (caller should provide explicit list)
 func SkillsForPreset(preset model.PresetID) []model.SkillID {
 	switch preset {
@@ -38,7 +38,7 @@ func SkillsForPreset(preset model.PresetID) []model.SkillID {
 		return copySkills(sddSkills)
 	case model.PresetEcosystemOnly:
 		return copySkills(append(sddSkills, foundationSkills...))
-	case model.PresetFullGentleman:
+	case model.PresetFull:
 		all := make([]model.SkillID, 0, len(sddSkills)+len(foundationSkills))
 		all = append(all, sddSkills...)
 		all = append(all, foundationSkills...)
