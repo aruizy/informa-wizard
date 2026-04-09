@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gentleman-programming/gentle-ai/internal/assets"
-	"github.com/gentleman-programming/gentle-ai/internal/components/filemerge"
-	"github.com/gentleman-programming/gentle-ai/internal/model"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/assets"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/filemerge"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 )
 
 // InjectionResult describes all files written by the GGA config injection.

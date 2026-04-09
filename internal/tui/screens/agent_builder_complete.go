@@ -3,8 +3,8 @@ package screens
 import (
 	"strings"
 
-	"github.com/gentleman-programming/gentle-ai/internal/agentbuilder"
-	"github.com/gentleman-programming/gentle-ai/internal/tui/styles"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agentbuilder"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/tui/styles"
 )
 
 // RenderABComplete renders the agent-builder completion screen.

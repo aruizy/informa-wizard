@@ -3,7 +3,7 @@ package monday
 import (
 	"encoding/json"
 
-	"github.com/gentleman-programming/gentle-ai/internal/model"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 )
 
 // mondayServerJSON returns the standalone MCP server config for Claude Code

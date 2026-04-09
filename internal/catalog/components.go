@@ -1,6 +1,6 @@
 package catalog
 
-import "github.com/gentleman-programming/gentle-ai/internal/model"
+import "gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 
 type Component struct {
 	ID          model.ComponentID

@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gentleman-programming/gentle-ai/internal/agents/opencode"
-	"github.com/gentleman-programming/gentle-ai/internal/backup"
-	"github.com/gentleman-programming/gentle-ai/internal/model"
-	"github.com/gentleman-programming/gentle-ai/internal/system"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/opencode"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/backup"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/system"
 )
 
 // missingBinaryLookPath simulates all installable binaries (engram, gga) as

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gentleman-programming/gentle-ai/internal/system"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/system"
 )
 
 // CheckAll runs update checks for all registered tools concurrently.

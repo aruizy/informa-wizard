@@ -3,7 +3,7 @@ package agents
 import (
 	"os"
 
-	"github.com/gentleman-programming/gentle-ai/internal/model"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 )
 
 // InstalledAgent pairs an agent ID with its resolved config root directory.

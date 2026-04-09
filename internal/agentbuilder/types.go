@@ -3,7 +3,7 @@ package agentbuilder
 import (
 	"time"
 
-	"github.com/gentleman-programming/gentle-ai/internal/model"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 )
 
 // SDDIntegrationMode defines how a generated agent integrates with SDD phases.

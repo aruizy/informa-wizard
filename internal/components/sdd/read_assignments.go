@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/gentleman-programming/gentle-ai/internal/model"
-	"github.com/gentleman-programming/gentle-ai/internal/opencode"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/opencode"
 )
 
 // sddPhaseSet is the set of valid SDD phase agent names that may appear in

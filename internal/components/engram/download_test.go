@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gentleman-programming/gentle-ai/internal/system"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/system"
 )
 
 // --- test helpers ---

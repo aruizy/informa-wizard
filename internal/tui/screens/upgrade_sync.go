@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gentleman-programming/gentle-ai/internal/tui/styles"
-	"github.com/gentleman-programming/gentle-ai/internal/update"
-	"github.com/gentleman-programming/gentle-ai/internal/update/upgrade"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/tui/styles"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/update"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/update/upgrade"
 )
 
 // RenderUpgradeSync handles all states of the combined upgrade+sync screen.

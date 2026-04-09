@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gentleman-programming/gentle-ai/internal/system"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/system"
 )
 
 // TestGGAAvailableDetectsViaLookPath verifies that ggaAvailable returns true

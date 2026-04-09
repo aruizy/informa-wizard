@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gentleman-programming/gentle-ai/internal/model"
-	"github.com/gentleman-programming/gentle-ai/internal/tui/styles"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/tui/styles"
 )
 
 // RenderProfiles renders the OpenCode SDD Profiles list screen.

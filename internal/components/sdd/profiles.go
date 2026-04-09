@@ -9,9 +9,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/gentleman-programming/gentle-ai/internal/assets"
-	"github.com/gentleman-programming/gentle-ai/internal/components/filemerge"
-	"github.com/gentleman-programming/gentle-ai/internal/model"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/assets"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/filemerge"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 )
 
 // profileNameRegex matches valid profile name slugs: lowercase alphanumeric + hyphens,

@@ -3,7 +3,7 @@ package sdd
 import (
 	"path/filepath"
 
-	"github.com/gentleman-programming/gentle-ai/internal/components/filemerge"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/filemerge"
 )
 
 // SharedPromptDir returns the directory where shared SDD prompt files are stored.

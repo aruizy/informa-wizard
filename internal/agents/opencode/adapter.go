@@ -6,9 +6,9 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/gentleman-programming/gentle-ai/internal/installcmd"
-	"github.com/gentleman-programming/gentle-ai/internal/model"
-	"github.com/gentleman-programming/gentle-ai/internal/system"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/installcmd"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/system"
 )
 
 var LookPathOverride = exec.LookPath

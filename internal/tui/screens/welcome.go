@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gentleman-programming/gentle-ai/internal/tui/styles"
-	"github.com/gentleman-programming/gentle-ai/internal/update"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/tui/styles"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/update"
 )
 
 // WelcomeOptions returns the welcome menu options.

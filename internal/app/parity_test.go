@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gentleman-programming/gentle-ai/internal/cli"
-	"github.com/gentleman-programming/gentle-ai/internal/planner"
-	"github.com/gentleman-programming/gentle-ai/internal/system"
-	"github.com/gentleman-programming/gentle-ai/internal/tui"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/cli"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/planner"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/system"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/tui"
 )
 
 func TestInstallDefaultsMatchTUIModelDefaults(t *testing.T) {

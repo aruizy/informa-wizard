@@ -13,8 +13,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/gentleman-programming/gentle-ai/internal/system"
-	"github.com/gentleman-programming/gentle-ai/internal/update"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/system"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/update"
 )
 
 // --- test helpers ---

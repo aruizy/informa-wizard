@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gentleman-programming/gentle-ai/internal/components/sdd"
-	"github.com/gentleman-programming/gentle-ai/internal/tui/styles"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/sdd"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/tui/styles"
 )
 
 // RenderProfileDelete renders the profile delete confirmation screen.

@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gentleman-programming/gentle-ai/internal/agents"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/claude"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/opencode"
-	windsurfagent "github.com/gentleman-programming/gentle-ai/internal/agents/windsurf"
-	"github.com/gentleman-programming/gentle-ai/internal/assets"
-	"github.com/gentleman-programming/gentle-ai/internal/model"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/claude"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/opencode"
+	windsurfagent "gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/windsurf"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/assets"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 	// agents/cursor, agents/gemini, agents/vscode used via agents.NewAdapter()
 )
 
@@ -335,7 +335,7 @@ func TestInjectCursorWritesSDDOrchestratorAndSkills(t *testing.T) {
 	}
 
 	// Verify SDD orchestrator was injected into the system prompt file.
-	promptPath := filepath.Join(home, ".cursor", "rules", "gentle-ai.mdc")
+	promptPath := filepath.Join(home, ".cursor", "rules", "informa-wizard.mdc")
 	content, readErr := os.ReadFile(promptPath)
 	if readErr != nil {
 		t.Fatalf("ReadFile(%q) error = %v", promptPath, readErr)

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gentleman-programming/gentle-ai/internal/components/filemerge"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/filemerge"
 )
 
 // UserHomeDirFn is the function used to resolve the user's home directory.

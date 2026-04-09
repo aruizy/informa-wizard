@@ -3,7 +3,7 @@ package skills
 import (
 	"testing"
 
-	"github.com/gentleman-programming/gentle-ai/internal/model"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 )
 
 func TestSkillsForPresetMinimalReturnsSDDOnly(t *testing.T) {

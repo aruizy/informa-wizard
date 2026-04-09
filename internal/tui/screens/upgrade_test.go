@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gentleman-programming/gentle-ai/internal/update"
-	"github.com/gentleman-programming/gentle-ai/internal/update/upgrade"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/update"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/update/upgrade"
 )
 
 // ─── RenderUpgrade states ──────────────────────────────────────────────────

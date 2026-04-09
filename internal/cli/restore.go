@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/gentleman-programming/gentle-ai/internal/backup"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/backup"
 )
 
 // RestoreFunc is the function signature for restoring a backup from its manifest.

@@ -3,8 +3,8 @@ package screens
 import (
 	"testing"
 
-	"github.com/gentleman-programming/gentle-ai/internal/model"
-	"github.com/gentleman-programming/gentle-ai/internal/opencode"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/opencode"
 )
 
 // makeTestState builds a minimal ModelPickerState with one provider and models

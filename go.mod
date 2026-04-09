@@ -1,4 +1,4 @@
-module github.com/gentleman-programming/gentle-ai
+module gitlab.informa.tools/ai/wizard/informa-wizard
 
 go 1.24.2
 

@@ -3,7 +3,7 @@ package engram
 import (
 	"testing"
 
-	"github.com/gentleman-programming/gentle-ai/internal/model"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 )
 
 func TestParseSetupModeDefaultsToSupported(t *testing.T) {

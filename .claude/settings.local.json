@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep:*)",
+      "Bash(go test:*)",
+      "Bash(grep:*)",
+      "Bash(go build:*)",
+      "Bash(cd:*)",
+      "Bash(find . -name '*_test.go' -exec grep -l 'gentle-ai' {})",
+      "Bash(while read:*)",
+      "Bash(do sed:*)",
+      "Bash(done)",
+      "Bash(python:*)",
+      "Bash(go install:*)"
+    ]
+  }
+}

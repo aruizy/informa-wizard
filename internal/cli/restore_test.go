@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gentleman-programming/gentle-ai/internal/backup"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/backup"
 )
 
 // setupRestoreHome creates a temporary home dir with N backup manifests.

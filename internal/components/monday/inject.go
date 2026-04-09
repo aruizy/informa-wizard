@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gentleman-programming/gentle-ai/internal/agents"
-	"github.com/gentleman-programming/gentle-ai/internal/components/filemerge"
-	"github.com/gentleman-programming/gentle-ai/internal/model"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/filemerge"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 )
 
 type InjectionResult struct {

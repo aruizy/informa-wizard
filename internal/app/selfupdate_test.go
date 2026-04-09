@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gentleman-programming/gentle-ai/internal/system"
-	"github.com/gentleman-programming/gentle-ai/internal/update"
-	"github.com/gentleman-programming/gentle-ai/internal/update/upgrade"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/system"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/update"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/update/upgrade"
 )
 
 // stubProfile returns a minimal PlatformProfile for testing.

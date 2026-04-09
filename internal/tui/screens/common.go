@@ -1,7 +1,7 @@
 package screens
 
 import (
-	"github.com/gentleman-programming/gentle-ai/internal/tui/styles"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/tui/styles"
 )
 
 func renderOptions(options []string, cursor int) string {

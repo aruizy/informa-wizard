@@ -6,12 +6,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gentleman-programming/gentle-ai/internal/agents"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/claude"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/opencode"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/vscode"
-	"github.com/gentleman-programming/gentle-ai/internal/model"
-	"github.com/gentleman-programming/gentle-ai/internal/system"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/claude"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/opencode"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/vscode"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/system"
 )
 
 func claudeAdapter() agents.Adapter   { return claude.NewAdapter() }

@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/gentleman-programming/gentle-ai/internal/system"
-	"github.com/gentleman-programming/gentle-ai/internal/tui/styles"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/system"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/tui/styles"
 )
 
 func DetectionOptions() []string {

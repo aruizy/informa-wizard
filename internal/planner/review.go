@@ -1,6 +1,6 @@
 package planner
 
-import "github.com/gentleman-programming/gentle-ai/internal/model"
+import "gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 
 func BuildReviewPayload(selection model.Selection, resolved ResolvedPlan) ReviewPayload {
 	autoAdded := make(map[model.ComponentID]struct{}, len(resolved.AddedDependencies))

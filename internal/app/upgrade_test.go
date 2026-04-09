@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gentleman-programming/gentle-ai/internal/update/upgrade"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/update/upgrade"
 )
 
 // renderUpgradeReportForTest is a test helper that wraps upgrade.RenderUpgradeReport.

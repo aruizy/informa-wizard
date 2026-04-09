@@ -3,15 +3,15 @@ package agents
 import (
 	"fmt"
 
-	"github.com/gentleman-programming/gentle-ai/internal/agents/antigravity"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/claude"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/codex"
-	cursoradapter "github.com/gentleman-programming/gentle-ai/internal/agents/cursor"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/gemini"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/opencode"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/vscode"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/windsurf"
-	"github.com/gentleman-programming/gentle-ai/internal/model"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/antigravity"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/claude"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/codex"
+	cursoradapter "gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/cursor"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/gemini"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/opencode"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/vscode"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/windsurf"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 )
 
 func NewAdapter(agent model.AgentID) (Adapter, error) {

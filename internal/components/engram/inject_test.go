@@ -8,12 +8,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gentleman-programming/gentle-ai/internal/agents"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/claude"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/codex"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/gemini"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/opencode"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/vscode"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/claude"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/codex"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/gemini"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/opencode"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/vscode"
 )
 
 func claudeAdapter() agents.Adapter   { return claude.NewAdapter() }

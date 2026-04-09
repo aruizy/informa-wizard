@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/gentleman-programming/gentle-ai/internal/assets"
-	"github.com/gentleman-programming/gentle-ai/internal/components/filemerge"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/assets"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/filemerge"
 )
 
 // RuntimeLibDir returns the runtime lib path used by gga.

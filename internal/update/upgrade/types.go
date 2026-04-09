@@ -3,7 +3,7 @@ package upgrade
 import (
 	"errors"
 
-	"github.com/gentleman-programming/gentle-ai/internal/update"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/update"
 )
 
 // ToolUpgradeStatus describes the outcome of a single tool upgrade attempt.

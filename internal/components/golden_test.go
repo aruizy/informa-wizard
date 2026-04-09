@@ -8,22 +8,22 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gentleman-programming/gentle-ai/internal/agents"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/antigravity"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/claude"
-	codexagent "github.com/gentleman-programming/gentle-ai/internal/agents/codex"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/cursor"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/gemini"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/opencode"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/vscode"
-	"github.com/gentleman-programming/gentle-ai/internal/agents/windsurf"
-	"github.com/gentleman-programming/gentle-ai/internal/assets"
-	"github.com/gentleman-programming/gentle-ai/internal/components/engram"
-	"github.com/gentleman-programming/gentle-ai/internal/components/mcp"
-	"github.com/gentleman-programming/gentle-ai/internal/components/persona"
-	"github.com/gentleman-programming/gentle-ai/internal/components/sdd"
-	"github.com/gentleman-programming/gentle-ai/internal/components/skills"
-	"github.com/gentleman-programming/gentle-ai/internal/model"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/antigravity"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/claude"
+	codexagent "gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/codex"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/cursor"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/gemini"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/opencode"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/vscode"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents/windsurf"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/assets"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/engram"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/mcp"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/persona"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/sdd"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/skills"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 )
 
 var update = flag.Bool("update", false, "update golden files")
@@ -176,8 +176,8 @@ func TestGoldenSDD_Cursor(t *testing.T) {
 		t.Fatalf("sdd.Inject(cursor) changed = false")
 	}
 
-	// Cursor writes SDD orchestrator to ~/.cursor/rules/gentle-ai.mdc.
-	rulesFile := readTestFile(t, filepath.Join(home, ".cursor", "rules", "gentle-ai.mdc"))
+	// Cursor writes SDD orchestrator to ~/.cursor/rules/informa-wizard.mdc.
+	rulesFile := readTestFile(t, filepath.Join(home, ".cursor", "rules", "informa-wizard.mdc"))
 	assertGolden(t, "sdd-cursor-rules.golden", rulesFile)
 
 	// Golden-check a representative SDD skill file.

@@ -3,8 +3,8 @@ package planner
 import (
 	"fmt"
 
-	"github.com/gentleman-programming/gentle-ai/internal/catalog"
-	"github.com/gentleman-programming/gentle-ai/internal/model"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/catalog"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 )
 
 type dependencyResolver struct {

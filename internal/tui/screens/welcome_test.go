@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gentleman-programming/gentle-ai/internal/tui/screens"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/tui/screens"
 )
 
 // ─── WelcomeOptions ──────────────────────────────────────────────────────────

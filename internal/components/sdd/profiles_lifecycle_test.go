@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gentleman-programming/gentle-ai/internal/components/filemerge"
-	"github.com/gentleman-programming/gentle-ai/internal/model"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/filemerge"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 )
 
 // TestProfileLifecycle_FullCRUD exercises the complete profile lifecycle:

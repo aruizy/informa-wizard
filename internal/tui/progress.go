@@ -3,8 +3,8 @@ package tui
 import (
 	"fmt"
 
-	"github.com/gentleman-programming/gentle-ai/internal/pipeline"
-	"github.com/gentleman-programming/gentle-ai/internal/tui/screens"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/pipeline"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/tui/screens"
 )
 
 type ProgressItem struct {
