@@ -54,8 +54,8 @@ SDD is the structured planning layer for substantial changes.
 
 ### Artifact Store Policy
 
-- `engram` — default when available; persistent memory across sessions
-- `openspec` — file-based artifacts; use only when user explicitly requests
+- `openspec` — default; file-based artifacts, committable, shareable with team, full git history
+- `engram` — persistent memory across sessions; use when user explicitly requests
 - `hybrid` — both backends; cross-session recovery + local files; more tokens per op
 - `none` — return results inline only; recommend enabling engram or openspec
 
@@ -97,6 +97,7 @@ When the user invokes `/sdd-new`, `/sdd-ff`, or `/sdd-continue` for the first ti
 
 - **Automatic** (`auto`): Run all phases back-to-back without pausing. Show the final result only. Use this when the user wants speed and trusts the process.
 - **Interactive** (`interactive`): After each phase completes, show the result summary and ASK: "Want to adjust anything or continue?" before proceeding to the next phase. Use this when the user wants to review and steer each step.
+- **Plan-Build** (`plan-build`): Planning phases (explore, propose, spec, design, tasks) run interactively — pause after each for review. Build phases (apply, verify, archive) run automatically back-to-back. Best balance: steer the plan, then let it execute.
 
 If the user doesn't specify, default to **Interactive** (safer, gives the user control).
 
@@ -108,7 +109,12 @@ In **Interactive** mode, between phases:
 3. Ask: "¿Seguimos? / Continue?" — accept YES/continue, NO/stop, or specific feedback to adjust
 4. If the user gives feedback, incorporate it before running the next phase
 
-For this agent (inline subagents): phases already run with user visibility between invocations. **Interactive** is the default behavior — show results between subagent calls and ask before proceeding. **Automatic** means invoke subagents sequentially without pausing to ask between phases.
+In **Plan-Build** mode:
+- Planning phases (explore → propose → spec → design → tasks): behave like Interactive — pause after each, show summary, ask before continuing
+- Build phases (apply → verify → archive): behave like Automatic — run back-to-back without pausing once the first build phase starts
+- At the transition point (after tasks completes), show a final plan summary and confirm: "Plan complete. Proceeding to build phases without pausing. ¿Arrancamos? / Start build?" — accept YES/start or specific feedback. Once confirmed, run all remaining build phases automatically.
+
+For this agent (inline subagents): phases already run with user visibility between invocations. **Interactive** is the default behavior — show results between subagent calls and ask before proceeding. **Automatic** means invoke subagents sequentially without pausing to ask between phases. **Plan-Build** means show results and ask during planning subagent calls, then invoke build subagents sequentially without pausing after the transition confirmation.
 
 ### Artifact Store Mode
 
@@ -118,7 +124,7 @@ When the user invokes `/sdd-new`, `/sdd-ff`, or `/sdd-continue` for the first ti
 - **`openspec`**: File-based. Creates `openspec/` directory with full artifact trail. Committable, shareable with team, full git history.
 - **`hybrid`**: Both — files for team sharing + engram for cross-session recovery. Higher token cost.
 
-If the user doesn't specify, detect: if engram is available → default to `engram`. Otherwise → `none`.
+If the user doesn't specify, default to `openspec`.
 
 Cache the artifact store choice for the session. Pass it as `artifact_store.mode` to every sub-agent launch.
 
@@ -229,6 +235,22 @@ When launching `sdd-apply` for a continuation batch (not the first batch):
 3. If not found (first batch), no special instruction needed.
 
 This prevents progress loss across batches. The sub-agent is responsible for read-merge-write, but the orchestrator MUST tell it that previous progress exists.
+
+#### Monday.com Forwarding (when configured)
+
+When the Monday component is installed (`monday_board_id` is available from project config or user input), the orchestrator MUST pass Monday context to `sdd-tasks`, `sdd-apply`, and `sdd-verify` sub-agents.
+
+At session start (or first SDD delegation), resolve the Monday board ID:
+1. Check `.gentle-ai/monday.json` in the workspace root for `{"board_id": "..."}`, OR
+2. Ask the user: "¿Tienes un board ID de Monday para esta sesión?"
+3. If neither available, skip Monday integration entirely.
+
+When launching sub-agents with Monday context, add to the prompt:
+- `sdd-tasks`: `"monday_board_id: {id}. After creating the task breakdown, search Monday for an existing item matching the change name. If found, use it. If not, create a new item with subtasks."`
+- `sdd-apply`: `"monday_board_id: {id}, monday_item_id: {item_id}. After completing tasks, update their subitem status to Done in Monday."`
+- `sdd-verify`: `"monday_board_id: {id}, monday_item_id: {item_id}. After verification, update the Monday item status based on the verdict (Done/Stuck)."`
+
+Cache the `monday_item_id` returned by `sdd-tasks` for subsequent phases.
 
 #### Engram Topic Key Format
 

@@ -114,7 +114,36 @@ Update `tasks.md` — change `- [ ]` to `- [x]` for completed tasks:
 - [ ] 1.3 Add auth routes to `internal/server/server.go`  ← still pending
 ```
 
-### Step 6: Persist Progress
+### Step 6: Monday.com Progress Sync (if configured)
+
+**Skip this step if the orchestrator did NOT provide a Monday board ID or monday_item_id.**
+
+After completing tasks, update their status in Monday:
+
+1. **Get board info** to find the status column:
+   ```
+   mcp__claude_ai_monday_com__get_board_info(boardId: "{monday_board_id}")
+   ```
+
+2. **For each completed task**, find its subitem and mark it done:
+   ```
+   mcp__claude_ai_monday_com__change_item_column_values(
+     boardId: "{monday_board_id}",
+     itemId: "{subitem_id}",
+     columnValues: { "status": "Done" }
+   )
+   ```
+   Match subtasks by name prefix (task number, e.g. "1.1:").
+
+3. **Post a progress update** on the main item:
+   ```
+   mcp__claude_ai_monday_com__create_update(
+     itemId: "{monday_item_id}",
+     body: "Apply progress: {N}/{total} tasks complete. Batch: {task range}"
+   )
+   ```
+
+### Step 7: Persist Artifact Progress
 
 **This step is MANDATORY — do NOT skip it.**
 
@@ -131,7 +160,7 @@ When saving apply-progress:
 2. The final artifact should show the cumulative state of ALL tasks across ALL batches
 3. Format: keep the same structure but ensure no completed task is lost from prior batches
 
-### Step 7: Return Summary
+### Step 8: Return Summary
 
 Return to the orchestrator:
 

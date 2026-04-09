@@ -333,7 +333,7 @@ type Model struct {
 func NewModel(detection system.DetectionResult, version string) Model {
 	selection := model.Selection{
 		Agents:     preselectedAgents(detection),
-		Persona:    model.PersonaGentleman,
+		Persona:    model.PersonaCustom,
 		Preset:     model.PresetFullGentleman,
 		Components: componentsForPreset(model.PresetFullGentleman),
 	}
@@ -2734,7 +2734,7 @@ func (m Model) startInstallation() (tea.Model, tea.Cmd) {
 		}
 
 		// Persist entry to registry.
-		registryPath := filepath.Join(homeDir(), ".config", "gentle-ai", "custom-agents.json")
+		registryPath := filepath.Join(homeDir(), ".config", "informa-wizard", "custom-agents.json")
 		_ = os.MkdirAll(filepath.Dir(registryPath), 0755)
 		if reg, loadErr := agentbuilder.LoadRegistry(registryPath); loadErr == nil {
 			// Collect IDs of agents that were successfully installed.

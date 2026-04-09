@@ -7,13 +7,15 @@ import (
 )
 
 type InstallFlags struct {
-	Agents     []string
-	Components []string
-	Skills     []string
-	Persona    string
-	Preset     string
-	SDDMode    string
-	DryRun     bool
+	Agents       []string
+	Components   []string
+	Skills       []string
+	Persona      string
+	Preset       string
+	SDDMode      string
+	MondayToken  string
+	MondayBoard  string
+	DryRun       bool
 }
 
 func ParseInstallFlags(args []string) (InstallFlags, error) {
@@ -30,6 +32,8 @@ func ParseInstallFlags(args []string) (InstallFlags, error) {
 	fs.StringVar(&opts.Persona, "persona", "", "persona to apply")
 	fs.StringVar(&opts.Preset, "preset", "", "preset to apply")
 	fs.StringVar(&opts.SDDMode, "sdd-mode", "", "SDD orchestrator mode: single or multi (default: single)")
+	fs.StringVar(&opts.MondayToken, "monday-token", "", "Monday.com API token for MCP integration")
+	fs.StringVar(&opts.MondayBoard, "monday-board", "", "Monday.com default board ID for task creation")
 	fs.BoolVar(&opts.DryRun, "dry-run", false, "preview plan without executing")
 
 	if err := fs.Parse(args); err != nil {

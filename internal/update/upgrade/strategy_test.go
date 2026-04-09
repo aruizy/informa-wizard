@@ -193,7 +193,7 @@ func TestRunStrategy_BinaryWindowsSelfUpdateSkipped(t *testing.T) {
 
 	r := update.UpdateResult{
 		Tool: update.ToolInfo{
-			Name:          "gentle-ai",
+			Name:          "informa-wizard",
 			InstallMethod: update.InstallBinary,
 		},
 		LatestVersion: "1.5.0",
@@ -276,7 +276,7 @@ func TestEffectiveMethod(t *testing.T) {
 func TestManualFallbackHint(t *testing.T) {
 	r := update.UpdateResult{
 		Tool: update.ToolInfo{
-			Name:          "gentle-ai",
+			Name:          "informa-wizard",
 			InstallMethod: update.InstallBinary,
 		},
 		LatestVersion: "1.5.0",
@@ -329,7 +329,7 @@ func TestBrewUpgrade_RunsUpdateBeforeUpgrade(t *testing.T) {
 		return exec.Command("echo", "ok")
 	}
 
-	err := brewUpgrade(context.Background(), "gentle-ai")
+	err := brewUpgrade(context.Background(), "informa-wizard")
 	if err != nil {
 		t.Fatalf("brewUpgrade: unexpected error: %v", err)
 	}
@@ -367,7 +367,7 @@ func TestBrewUpgrade_UpdateFailureIsNonFatal(t *testing.T) {
 		return exec.Command("echo", "Upgraded gentle-ai")
 	}
 
-	err := brewUpgrade(context.Background(), "gentle-ai")
+	err := brewUpgrade(context.Background(), "informa-wizard")
 	// brew update failed but brew upgrade succeeded → overall success.
 	if err != nil {
 		t.Errorf("expected success when brew update fails but brew upgrade succeeds, got: %v", err)

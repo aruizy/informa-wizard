@@ -2,12 +2,12 @@
 
 <img width="3276" height="1280" alt="image" src="https://github.com/user-attachments/assets/3a3e4ae1-b9f4-4ce9-8fd0-3833812beb99" />
 
-<h1>AI Gentle Stack</h1>
+<h1>Informa Wizard</h1>
 
-<p><strong>One command. Any agent. Any OS. The Gentleman AI ecosystem -- configured and ready.</strong></p>
+<p><strong>One command. Any agent. Any OS. The Informa Wizard ecosystem -- configured and ready.</strong></p>
 
 <p>
-<a href="https://github.com/Gentleman-Programming/gentle-ai/releases"><img src="https://img.shields.io/github/v/release/Gentleman-Programming/gentle-ai" alt="Release"></a>
+<a href="https://github.com/Gentleman-Programming/informa-wizard/releases"><img src="https://img.shields.io/github/v/release/Gentleman-Programming/informa-wizard" alt="Release"></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
 <img src="https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go&logoColor=white" alt="Go 1.24+">
 <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="Platform">
@@ -19,7 +19,7 @@
 
 ## What It Does
 
-This is NOT an AI agent installer. Most agents are easy to install. This is an **ecosystem configurator** -- it takes whatever AI coding agent(s) you use and supercharges them with the Gentleman stack: persistent memory, Spec-Driven Development workflow, curated coding skills, MCP servers, an AI provider switcher, a teaching-oriented persona with security-first permissions, and per-phase model assignment so each SDD step can run on a different model.
+This is NOT an AI agent installer. Most agents are easy to install. This is an **ecosystem configurator** -- it takes whatever AI coding agent(s) you use and supercharges them with the Informa Wizard stack: persistent memory, Spec-Driven Development workflow, curated coding skills, MCP servers, an AI provider switcher, a teaching-oriented persona with security-first permissions, and per-phase model assignment so each SDD step can run on a different model.
 
 **Before**: "I installed Claude Code / OpenCode / Cursor, but it's just a chatbot that writes code."
 
@@ -47,17 +47,17 @@ This is NOT an AI agent installer. Most agents are easy to install. This is an *
 ### macOS / Linux
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Gentleman-Programming/informa-wizard/main/scripts/install.sh | bash
 ```
 
 ### Windows
 
 ```powershell
 scoop bucket add gentleman https://github.com/Gentleman-Programming/scoop-bucket
-scoop install gentle-ai
+scoop install informa-wizard
 ```
 
-Or via PowerShell script: `irm https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/scripts/install.ps1 | iex`
+Or via PowerShell script: `irm https://raw.githubusercontent.com/Gentleman-Programming/informa-wizard/main/scripts/install.ps1 | iex`
 
 ### After install: project-level setup
 
@@ -78,26 +78,26 @@ These are **not required** for basic usage. The SDD orchestrator runs `/sdd-init
 
 ```bash
 brew tap Gentleman-Programming/homebrew-tap
-brew install gentle-ai
+brew install informa-wizard
 ```
 
 ### Go install (any platform with Go 1.24+)
 
 ```bash
-go install github.com/gentleman-programming/gentle-ai/cmd/gentle-ai@latest
+go install github.com/gentleman-programming/informa-wizard/cmd/informa-wizard@latest
 ```
 
 ### Scoop (Windows)
 
 ```powershell
 scoop bucket add gentleman https://github.com/Gentleman-Programming/scoop-bucket
-scoop install gentle-ai
+scoop install informa-wizard
 ```
 
 **Migrating from PowerShell installer to Scoop?** Remove the old binary first:
 
 ```powershell
-Remove-Item "$env:LOCALAPPDATA\gentle-ai" -Recurse -Force
+Remove-Item "$env:LOCALAPPDATA\informa-wizard" -Recurse -Force
 # Then install via Scoop as shown above
 ```
 
@@ -105,15 +105,15 @@ Remove-Item "$env:LOCALAPPDATA\gentle-ai" -Recurse -Force
 
 ```powershell
 # Option 1: PowerShell installer (downloads binary from GitHub Releases)
-irm https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/Gentleman-Programming/informa-wizard/main/scripts/install.ps1 | iex
 
 # Option 2: Go install (requires Go 1.24+)
-go install github.com/gentleman-programming/gentle-ai/cmd/gentle-ai@latest
+go install github.com/gentleman-programming/informa-wizard/cmd/informa-wizard@latest
 ```
 
 ### From releases
 
-Download the binary for your platform from [GitHub Releases](https://github.com/Gentleman-Programming/gentle-ai/releases).
+Download the binary for your platform from [GitHub Releases](https://github.com/Gentleman-Programming/informa-wizard/releases).
 
 ---
 
@@ -129,7 +129,7 @@ See [Backup & Rollback Guide](docs/rollback.md) for details.
 
 | Topic | Description |
 |-------|-------------|
-| [Intended Usage](docs/intended-usage.md) | How gentle-ai is meant to be used — the mental model |
+| [Intended Usage](docs/intended-usage.md) | How informa-wizard is meant to be used — the mental model |
 | [Agents](docs/agents.md) | Supported agents, feature matrix, config paths, and per-agent notes |
 | [Components, Skills & Presets](docs/components.md) | All components, GGA behavior, skill catalog, and preset definitions |
 | [Usage](docs/usage.md) | Persona modes, interactive TUI, CLI flags, and dependency management |
@@ -143,8 +143,8 @@ See [Backup & Rollback Guide](docs/rollback.md) for details.
 
 This project exists because of the community. See [CONTRIBUTORS.md](CONTRIBUTORS.md) for the full list.
 
-<a href="https://github.com/Gentleman-Programming/gentle-ai/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=Gentleman-Programming/gentle-ai" />
+<a href="https://github.com/Gentleman-Programming/informa-wizard/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Gentleman-Programming/informa-wizard" />
 </a>
 
 ---

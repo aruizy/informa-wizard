@@ -29,6 +29,8 @@ var mvpSkills = []Skill{
 	{ID: model.SkillBranchPR, Name: "branch-pr", Category: "workflow", Priority: "p0"},
 	{ID: model.SkillIssueCreation, Name: "issue-creation", Category: "workflow", Priority: "p0"},
 	{ID: model.SkillSkillRegistry, Name: "skill-registry", Category: "workflow", Priority: "p0"},
+	// Monday.com integration
+	{ID: model.SkillMiniPRDMonday, Name: "mini-prd-creator-monday", Category: "workflow", Priority: "p1"},
 }
 
 func MVPSkills() []Skill {

@@ -30,7 +30,7 @@ func TestNavigationWelcomeToDetection(t *testing.T) {
 
 func TestNavigationBackWithEscape(t *testing.T) {
 	m := NewModel(system.DetectionResult{}, "dev")
-	m.Screen = ScreenPersona
+	m.Screen = ScreenPreset
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	state := updated.(Model)

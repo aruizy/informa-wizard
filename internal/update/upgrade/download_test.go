@@ -75,7 +75,7 @@ func TestAssetURLResolution(t *testing.T) {
 		{
 			name:       "darwin amd64",
 			owner:      "Gentleman-Programming",
-			repo:       "gentle-ai",
+			repo:       "informa-wizard",
 			version:    "1.5.0",
 			goos:       "darwin",
 			goarch:     "amd64",
@@ -84,7 +84,7 @@ func TestAssetURLResolution(t *testing.T) {
 		{
 			name:       "darwin arm64",
 			owner:      "Gentleman-Programming",
-			repo:       "gentle-ai",
+			repo:       "informa-wizard",
 			version:    "1.5.0",
 			goos:       "darwin",
 			goarch:     "arm64",
@@ -102,7 +102,7 @@ func TestAssetURLResolution(t *testing.T) {
 		{
 			name:       "contains version",
 			owner:      "Gentleman-Programming",
-			repo:       "gentle-ai",
+			repo:       "informa-wizard",
 			version:    "1.5.0",
 			goos:       "darwin",
 			goarch:     "amd64",
@@ -243,9 +243,9 @@ func TestDownload_WindowsAlwaysManualFallback(t *testing.T) {
 
 	r := update.UpdateResult{
 		Tool: update.ToolInfo{
-			Name:          "gentle-ai",
+			Name:          "informa-wizard",
 			Owner:         "Gentleman-Programming",
-			Repo:          "gentle-ai",
+			Repo:          "informa-wizard",
 			InstallMethod: update.InstallBinary,
 		},
 		LatestVersion: "1.5.0",
@@ -288,7 +288,7 @@ func TestFindBinaryInTar(t *testing.T) {
 	f.Close()
 
 	tarContent, _ := os.ReadFile(tarPath)
-	outPath := filepath.Join(t.TempDir(), "gentle-ai")
+	outPath := filepath.Join(t.TempDir(), "informa-wizard")
 
 	// Use an httptest server to serve the tar.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -301,7 +301,7 @@ func TestFindBinaryInTar(t *testing.T) {
 	t.Cleanup(func() { httpClient = origHTTPClient })
 	httpClient = server.Client()
 
-	err := downloadBinary(context.Background(), server.URL+"/release.tar.gz", "gentle-ai", outPath)
+	err := downloadBinary(context.Background(), server.URL+"/release.tar.gz", "informa-wizard", outPath)
 	if err != nil {
 		t.Fatalf("downloadBinary: %v", err)
 	}

@@ -224,14 +224,42 @@ A spec scenario is only considered COMPLIANT when there is a test that passed pr
 
 If Strict TDD is active, follow the instructions in `strict-tdd-verify.md` (Step 5 Expanded: Test Layer Validation).
 
-### Step 8: Persist Verification Report
+### Step 8: Monday.com Verification Sync (if configured)
+
+**Skip this step if the orchestrator did NOT provide a Monday board ID or monday_item_id.**
+
+After producing the verdict, update the Monday item:
+
+1. **Update the main item status** based on the verdict:
+   ```
+   PASS         → status: "Done"
+   PASS WITH WARNINGS → status: "Done" (add warning note)
+   FAIL         → status: "Stuck"
+   ```
+   ```
+   mcp__claude_ai_monday_com__change_item_column_values(
+     boardId: "{monday_board_id}",
+     itemId: "{monday_item_id}",
+     columnValues: { "status": "{mapped_status}" }
+   )
+   ```
+
+2. **Post the verification summary as an update**:
+   ```
+   mcp__claude_ai_monday_com__create_update(
+     itemId: "{monday_item_id}",
+     body: "Verification: {PASS|FAIL}. {N}/{total} scenarios compliant. {critical_count} critical issues."
+   )
+   ```
+
+### Step 9: Persist Verification Report
 
 Follow **Section C** from `skills/_shared/sdd-phase-common.md`.
 - artifact: `verify-report`
 - topic_key: `sdd/{change-name}/verify-report`
 - type: `architecture`
 
-### Step 9: Return Summary
+### Step 10: Return Summary
 
 Return to the orchestrator the same content you wrote to `verify-report.md`:
 

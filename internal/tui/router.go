@@ -8,9 +8,8 @@ type Route struct {
 var linearRoutes = map[Screen]Route{
 	ScreenWelcome:                {Forward: ScreenDetection},
 	ScreenDetection:              {Forward: ScreenAgents, Backward: ScreenWelcome},
-	ScreenAgents:                 {Forward: ScreenPersona, Backward: ScreenDetection},
-	ScreenPersona:                {Forward: ScreenPreset, Backward: ScreenAgents},
-	ScreenPreset:                 {Forward: ScreenDependencyTree, Backward: ScreenPersona},
+	ScreenAgents:                 {Forward: ScreenPreset, Backward: ScreenDetection},
+	ScreenPreset:                 {Forward: ScreenDependencyTree, Backward: ScreenAgents},
 	ScreenClaudeModelPicker:      {Forward: ScreenDependencyTree, Backward: ScreenPreset},
 	ScreenSDDMode:                {Forward: ScreenStrictTDD, Backward: ScreenPreset},
 	ScreenStrictTDD:              {Forward: ScreenDependencyTree, Backward: ScreenSDDMode},

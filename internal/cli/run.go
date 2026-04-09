@@ -16,6 +16,7 @@ import (
 	"github.com/gentleman-programming/gentle-ai/internal/components/engram"
 	"github.com/gentleman-programming/gentle-ai/internal/components/gga"
 	"github.com/gentleman-programming/gentle-ai/internal/components/mcp"
+	"github.com/gentleman-programming/gentle-ai/internal/components/monday"
 	"github.com/gentleman-programming/gentle-ai/internal/components/permissions"
 	"github.com/gentleman-programming/gentle-ai/internal/components/persona"
 	"github.com/gentleman-programming/gentle-ai/internal/components/sdd"
@@ -245,7 +246,7 @@ type runtimeState struct {
 }
 
 func newInstallRuntime(homeDir string, selection model.Selection, resolved planner.ResolvedPlan, profile system.PlatformProfile) (*installRuntime, error) {
-	backupRoot := filepath.Join(homeDir, ".gentle-ai", "backups")
+	backupRoot := filepath.Join(homeDir, ".informa-wizard", "backups")
 	if err := os.MkdirAll(backupRoot, 0o755); err != nil {
 		return nil, fmt.Errorf("create backup root directory %q: %w", backupRoot, err)
 	}
@@ -604,6 +605,17 @@ func (s componentApplyStep) Run() error {
 			}
 		}
 		return nil
+	case model.ComponentMonday:
+		if s.selection.Monday.Token == "" {
+			fmt.Fprintf(os.Stderr, "WARNING: monday component selected but no --monday-token provided — skipping MCP injection\n")
+			return nil
+		}
+		for _, adapter := range adapters {
+			if _, err := monday.Inject(s.homeDir, adapter, s.selection.Monday); err != nil {
+				return fmt.Errorf("inject monday for %q: %w", adapter.Agent(), err)
+			}
+		}
+		return nil
 	default:
 		return fmt.Errorf("component %q is not supported in install runtime", s.component)
 	}
@@ -649,7 +661,7 @@ func windowsGoCandidates() []string {
 // BuildRealStagePlan creates a StagePlan with real backup, agent install, and component apply steps.
 // It is used by both the CLI and TUI paths.
 func BuildRealStagePlan(homeDir string, selection model.Selection, resolved planner.ResolvedPlan, profile system.PlatformProfile) (pipeline.StagePlan, error) {
-	backupRoot := filepath.Join(homeDir, ".gentle-ai", "backups")
+	backupRoot := filepath.Join(homeDir, ".informa-wizard", "backups")
 	if err := os.MkdirAll(backupRoot, 0o755); err != nil {
 		return pipeline.StagePlan{}, fmt.Errorf("create backup root directory %q: %w", backupRoot, err)
 	}
@@ -770,6 +782,28 @@ func backupTargets(homeDir string, selection model.Selection, resolved planner.R
 	paths := map[string]struct{}{}
 	adapters := resolveAdapters(resolved.Agents)
 
+	// Back up entire agent config directories — any file inside these dirs
+	// could be overwritten by the install pipeline. Walking the full tree
+	// ensures nothing is lost regardless of which components are selected.
+	for _, adapter := range adapters {
+		configDir := adapter.GlobalConfigDir(homeDir)
+		if configDir == "" {
+			continue
+		}
+		for _, p := range walkDirFiles(configDir) {
+			paths[p] = struct{}{}
+		}
+	}
+
+	// Also include GGA config paths (not under any agent dir).
+	if hasComponent(resolved.OrderedComponents, model.ComponentGGA) {
+		for _, p := range walkDirFiles(filepath.Join(homeDir, ".config", "gga")) {
+			paths[p] = struct{}{}
+		}
+	}
+
+	// Component-specific paths catch files outside agent config dirs
+	// (e.g., VS Code settings in platform-specific locations).
 	for _, component := range resolved.OrderedComponents {
 		for _, path := range componentPaths(homeDir, selection, adapters, component) {
 			paths[path] = struct{}{}
@@ -782,6 +816,22 @@ func backupTargets(homeDir string, selection model.Selection, resolved planner.R
 	}
 
 	return targets
+}
+
+// walkDirFiles returns all regular file paths under dir, recursively.
+// If the directory does not exist or is empty, it returns nil.
+func walkDirFiles(dir string) []string {
+	var files []string
+	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil // skip inaccessible entries
+		}
+		if !d.IsDir() {
+			files = append(files, path)
+		}
+		return nil
+	})
+	return files
 }
 
 func componentPaths(homeDir string, selection model.Selection, adapters []agents.Adapter, component model.ComponentID) []string {
@@ -903,6 +953,19 @@ func componentPaths(homeDir string, selection model.Selection, adapters []agents
 		case model.ComponentTheme:
 			if p := adapter.SettingsPath(homeDir); p != "" {
 				paths = append(paths, p)
+			}
+		case model.ComponentMonday:
+			switch adapter.MCPStrategy() {
+			case model.StrategySeparateMCPFiles:
+				paths = append(paths, adapter.MCPConfigPath(homeDir, "monday"))
+			case model.StrategyMergeIntoSettings:
+				if p := adapter.SettingsPath(homeDir); p != "" {
+					paths = append(paths, p)
+				}
+			case model.StrategyMCPConfigFile:
+				if p := adapter.MCPConfigPath(homeDir, "monday"); p != "" {
+					paths = append(paths, p)
+				}
 			}
 		}
 	}

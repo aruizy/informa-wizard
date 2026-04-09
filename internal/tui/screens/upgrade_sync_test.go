@@ -48,7 +48,7 @@ func TestRenderUpgradeSync_RunningUpgradePhase(t *testing.T) {
 func TestRenderUpgradeSync_RunningSyncPhase(t *testing.T) {
 	report := &upgrade.UpgradeReport{
 		Results: []upgrade.ToolUpgradeResult{
-			{ToolName: "gentle-ai", OldVersion: "v1.0.0", NewVersion: "v2.0.0", Status: upgrade.UpgradeSucceeded},
+			{ToolName: "informa-wizard", OldVersion: "v1.0.0", NewVersion: "v2.0.0", Status: upgrade.UpgradeSucceeded},
 		},
 	}
 
@@ -71,7 +71,7 @@ func TestRenderUpgradeSync_RunningSyncPhase(t *testing.T) {
 func TestRenderUpgradeSync_CombinedResult(t *testing.T) {
 	report := &upgrade.UpgradeReport{
 		Results: []upgrade.ToolUpgradeResult{
-			{ToolName: "gentle-ai", OldVersion: "v1.0.0", NewVersion: "v2.0.0", Status: upgrade.UpgradeSucceeded},
+			{ToolName: "informa-wizard", OldVersion: "v1.0.0", NewVersion: "v2.0.0", Status: upgrade.UpgradeSucceeded},
 		},
 	}
 	const syncFilesChanged = 3

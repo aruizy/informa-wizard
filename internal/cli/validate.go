@@ -53,12 +53,14 @@ func NormalizeInstallFlags(flags InstallFlags, detection system.DetectionResult)
 	}
 	selection.SDDMode = sddMode
 
+	selection.Monday = normalizeMondayConfig(flags.MondayToken, flags.MondayBoard)
+
 	return InstallInput{Selection: selection, DryRun: flags.DryRun}, nil
 }
 
 func normalizePersona(value string) (model.PersonaID, error) {
 	if strings.TrimSpace(value) == "" {
-		return model.PersonaGentleman, nil
+		return model.PersonaCustom, nil
 	}
 
 	switch model.PersonaID(value) {
@@ -153,7 +155,6 @@ func componentsForPreset(preset model.PresetID) []model.ComponentID {
 			model.ComponentSDD,
 			model.ComponentSkills,
 			model.ComponentContext7,
-			model.ComponentPersona,
 			model.ComponentPermission,
 			model.ComponentGGA,
 		}
@@ -207,6 +208,13 @@ func asAgentIDs(values []string) []model.AgentID {
 	}
 
 	return agents
+}
+
+func normalizeMondayConfig(token, boardID string) model.MondayConfig {
+	return model.MondayConfig{
+		Token:   strings.TrimSpace(token),
+		BoardID: strings.TrimSpace(boardID),
+	}
 }
 
 func unique[T comparable](items []T) []T {

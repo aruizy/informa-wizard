@@ -64,12 +64,12 @@ func selfUpdate(ctx context.Context, version string, profile system.PlatformProf
 	defer cancel()
 
 	// Check for updates (only gentle-ai).
-	results := updateCheckFiltered(ctx, version, profile, []string{"gentle-ai"})
+	results := updateCheckFiltered(ctx, version, profile, []string{"informa-wizard"})
 
 	// Find the gentle-ai result.
 	var target *update.UpdateResult
 	for i := range results {
-		if results[i].Tool.Name == "gentle-ai" {
+		if results[i].Tool.Name == "informa-wizard" {
 			target = &results[i]
 			break
 		}
@@ -92,7 +92,7 @@ func selfUpdate(ctx context.Context, version string, profile system.PlatformProf
 	// Check if upgrade succeeded.
 	var succeeded bool
 	for _, r := range report.Results {
-		if r.ToolName == "gentle-ai" && r.Status == upgrade.UpgradeSucceeded {
+		if r.ToolName == "informa-wizard" && r.Status == upgrade.UpgradeSucceeded {
 			succeeded = true
 			break
 		}
@@ -111,13 +111,13 @@ func selfUpdate(ctx context.Context, version string, profile system.PlatformProf
 
 	// Unix: re-exec with the updated binary.
 	//
-	// Use exec.LookPath("gentle-ai") rather than os.Executable() because
+	// Use exec.LookPath("informa-wizard") rather than os.Executable() because
 	// on Homebrew, os.Executable() resolves to the versioned Cellar path
 	// (e.g. /opt/homebrew/Cellar/gentle-ai/1.8.5/bin/gentle-ai) which
 	// still points to the OLD binary after upgrade. The PATH symlink
 	// (/opt/homebrew/bin/gentle-ai) is updated by Homebrew to the new
 	// version, so LookPath gives us the correct binary.
-	executable, err := lookPathFn("gentle-ai")
+	executable, err := lookPathFn("informa-wizard")
 	if err != nil {
 		// Fallback to os.Executable() if LookPath fails.
 		executable, err = os.Executable()

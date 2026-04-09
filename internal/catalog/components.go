@@ -17,6 +17,7 @@ var mvpComponents = []Component{
 	{ID: model.ComponentPermission, Name: "Permissions", Description: "Security-first defaults and guardrails"},
 	{ID: model.ComponentGGA, Name: "GGA", Description: "Gentleman Guardian Angel — AI provider switcher"},
 	{ID: model.ComponentTheme, Name: "Theme", Description: "Gentleman Kanagawa theme overlay (future)"},
+	{ID: model.ComponentMonday, Name: "Monday", Description: "Monday.com MCP integration for task management"},
 }
 
 func MVPComponents() []Component {

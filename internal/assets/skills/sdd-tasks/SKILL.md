@@ -127,7 +127,47 @@ Follow **Section C** from `skills/_shared/sdd-phase-common.md`.
 - topic_key: `sdd/{change-name}/tasks`
 - type: `architecture`
 
-### Step 5: Return Summary
+### Step 5: Monday.com Sync (if configured)
+
+**Skip this step if the orchestrator did NOT provide a Monday board ID.**
+
+When the orchestrator includes `monday_board_id` in the launch prompt:
+
+1. **Search for existing item** on the board matching the change name:
+   ```
+   mcp__claude_ai_monday_com__search(query: "{change-name}")
+   ```
+   Filter results to the target board. If a matching item exists, use it as the parent.
+
+2. **If NO existing item found**, create a main item:
+   ```
+   mcp__claude_ai_monday_com__create_item(
+     boardId: "{monday_board_id}",
+     itemName: "SDD: {change-name}"
+   )
+   ```
+
+3. **Create subtask items** — one per task from the breakdown:
+   ```
+   FOR EACH TASK in tasks.md:
+     mcp__claude_ai_monday_com__create_item(
+       boardId: "{monday_board_id}",
+       itemName: "{task number}: {task description}",
+       parentItemId: "{main_item_id}"
+     )
+   ```
+
+4. **Post the full task breakdown as an update** on the main item:
+   ```
+   mcp__claude_ai_monday_com__create_update(
+     itemId: "{main_item_id}",
+     body: "{tasks.md content}"
+   )
+   ```
+
+5. Include the Monday item ID in the return summary so subsequent phases can reference it.
+
+### Step 6: Return Summary
 
 Return to the orchestrator:
 
@@ -144,6 +184,10 @@ Return to the orchestrator:
 | Phase 2 | {N} | {Phase name} |
 | Phase 3 | {N} | {Phase name} |
 | Total | {N} | |
+
+### Monday.com
+**Item ID**: {monday_item_id or "not configured"}
+**Subtasks created**: {N or "N/A"}
 
 ### Implementation Order
 {Brief description of the recommended order and why}

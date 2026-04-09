@@ -36,8 +36,8 @@ SDD is the structured planning layer for substantial changes.
 
 ### Artifact Store Policy
 
-- `engram` — default when available; persistent memory across sessions via MCP
-- `openspec` — file-based artifacts; use only when user explicitly requests
+- `openspec` — default; file-based artifacts, committable, shareable with team, full git history
+- `engram` — persistent memory across sessions via MCP; use when user explicitly requests
 - `hybrid` — both backends; cross-session recovery + local files; more tokens per op
 - `none` — return results inline only; recommend enabling engram or openspec
 
@@ -81,6 +81,7 @@ When the user invokes `/sdd-new`, `/sdd-ff`, or `/sdd-continue` for the first ti
 
 - **Automatic** (`auto`): Run all phases sequentially without pausing. Show the final result only. Use this when the user wants speed and trusts the process.
 - **Interactive** (`interactive`): After each phase completes, show the result summary and ASK: "Want to adjust anything or continue?" before proceeding to the next phase. Use this when the user wants to review and steer each step.
+- **Plan-Build** (`plan-build`): Planning phases (explore, propose, spec, design, tasks) run interactively — pause after each for review. Build phases (apply, verify, archive) run automatically back-to-back. Best balance: steer the plan, then let it execute.
 
 If the user doesn't specify, default to **Interactive** (safer, gives the user control).
 
@@ -92,7 +93,12 @@ In **Interactive** mode, between phases:
 3. Ask: "¿Seguimos? / Continue?" — accept YES/continue, NO/stop, or specific feedback to adjust
 4. If the user gives feedback, incorporate it before running the next phase
 
-For this agent (solo inline execution): **Interactive** is already the natural behavior — you pause between phases via Windsurf's Approval Gates. **Automatic** means skip the "Approve to proceed?" gates and run all phases sequentially without stopping.
+In **Plan-Build** mode:
+- Planning phases (explore → propose → spec → design → tasks): behave like Interactive — pause after each, show summary, ask before continuing
+- Build phases (apply → verify → archive): behave like Automatic — run back-to-back without pausing once the first build phase starts
+- At the transition point (after tasks completes), show a final plan summary and confirm: "Plan complete. Proceeding to build phases without pausing. ¿Arrancamos? / Start build?" — accept YES/start or specific feedback. Once confirmed, run all remaining build phases automatically.
+
+For this agent (solo inline execution): **Interactive** is already the natural behavior — you pause between phases via Windsurf's Approval Gates. **Automatic** means skip the "Approve to proceed?" gates and run all phases sequentially without stopping. **Plan-Build** means use Approval Gates during planning phases but skip them for build phases after the transition confirmation.
 
 ### Artifact Store Mode
 
@@ -102,7 +108,7 @@ When the user invokes `/sdd-new`, `/sdd-ff`, or `/sdd-continue` for the first ti
 - **`openspec`**: File-based. Creates `openspec/` directory with full artifact trail. Committable, shareable with team, full git history.
 - **`hybrid`**: Both — files for team sharing + engram for cross-session recovery. Higher token cost.
 
-If the user doesn't specify, detect: if engram is available → default to `engram`. Otherwise → `none`.
+If the user doesn't specify, default to `openspec`.
 
 Cache the artifact store choice for the session. Pass it as `artifact_store.mode` to every sub-agent launch.
 
@@ -274,6 +280,22 @@ When executing `sdd-apply` for a continuation batch (not the first batch):
 3. If not found (first batch), no special handling needed.
 
 This prevents progress loss across batches. Read-merge-write is mandatory for continuation batches.
+
+#### Monday.com Forwarding (when configured)
+
+When the Monday component is installed (`monday_board_id` is available from project config or user input), the orchestrator MUST pass Monday context to `sdd-tasks`, `sdd-apply`, and `sdd-verify` phases.
+
+At session start (or first SDD command), resolve the Monday board ID:
+1. Check `.gentle-ai/monday.json` in the workspace root for `{"board_id": "..."}`, OR
+2. Ask the user: "¿Tienes un board ID de Monday para esta sesión?"
+3. If neither available, skip Monday integration entirely.
+
+When running phases with Monday context:
+- `sdd-tasks`: After creating the task breakdown, search Monday for an existing item matching the change name. If found, use it. If not, create a new item with subtasks.
+- `sdd-apply`: After completing tasks, update their subitem status to Done in Monday.
+- `sdd-verify`: After verification, update the Monday item status based on the verdict (Done/Stuck).
+
+Cache the `monday_item_id` returned by `sdd-tasks` for subsequent phases.
 
 ### Non-SDD Tasks
 

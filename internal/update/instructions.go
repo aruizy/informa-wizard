@@ -7,7 +7,7 @@ import (
 // updateHint returns a platform-specific instruction string for updating the given tool.
 func updateHint(tool ToolInfo, profile system.PlatformProfile) string {
 	switch tool.Name {
-	case "gentle-ai":
+	case "informa-wizard":
 		return gentleAIHint(profile)
 	case "engram":
 		return engramHint(profile)
@@ -21,11 +21,11 @@ func updateHint(tool ToolInfo, profile system.PlatformProfile) string {
 func gentleAIHint(profile system.PlatformProfile) string {
 	switch profile.OS {
 	case "darwin":
-		return "brew upgrade gentle-ai"
+		return "brew upgrade informa-wizard"
 	case "linux":
-		return "curl -fsSL https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/scripts/install.sh | bash"
+		return "curl -fsSL https://raw.githubusercontent.com/Gentleman-Programming/informa-wizard/main/scripts/install.sh | bash"
 	case "windows":
-		return "irm https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/scripts/install.ps1 | iex"
+		return "irm https://raw.githubusercontent.com/Gentleman-Programming/informa-wizard/main/scripts/install.ps1 | iex"
 	default:
 		return ""
 	}
@@ -36,7 +36,7 @@ func engramHint(profile system.PlatformProfile) string {
 	case "brew":
 		return "brew upgrade engram"
 	default:
-		return "gentle-ai upgrade (downloads pre-built binary)"
+		return "informa-wizard upgrade (downloads pre-built binary)"
 	}
 }
 

@@ -129,7 +129,7 @@ func TestOldManifestRemainsReadable(t *testing.T) {
 	oldJSON := `{
   "id": "20260322150405.000000000",
   "created_at": "2026-03-22T15:04:05Z",
-  "root_dir": "/home/user/.gentle-ai/backups/20260322150405.000000000",
+  "root_dir": "/home/user/.informa-wizard/backups/20260322150405.000000000",
   "entries": []
 }`
 
@@ -230,7 +230,7 @@ func TestManifestFileCountField(t *testing.T) {
 		oldJSON := `{
   "id": "old-no-fc",
   "created_at": "2026-03-22T15:04:05Z",
-  "root_dir": "/home/user/.gentle-ai/backups/old",
+  "root_dir": "/home/user/.informa-wizard/backups/old",
   "entries": []
 }`
 		dir := t.TempDir()
@@ -293,7 +293,7 @@ func TestManifestCreatedByVersionField(t *testing.T) {
 		oldJSON := `{
   "id": "old-no-ver",
   "created_at": "2026-03-22T15:04:05Z",
-  "root_dir": "/home/user/.gentle-ai/backups/old",
+  "root_dir": "/home/user/.informa-wizard/backups/old",
   "entries": []
 }`
 		dir := t.TempDir()
@@ -726,7 +726,7 @@ func TestManifestNewFields(t *testing.T) {
 		oldJSON := `{
   "id": "old-no-new-fields",
   "created_at": "2026-03-22T15:04:05Z",
-  "root_dir": "/home/user/.gentle-ai/backups/old",
+  "root_dir": "/home/user/.informa-wizard/backups/old",
   "entries": []
 }`
 		dir := t.TempDir()

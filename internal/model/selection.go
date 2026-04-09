@@ -1,5 +1,11 @@
 package model
 
+// MondayConfig holds the Monday.com integration settings provided during install.
+type MondayConfig struct {
+	Token   string // Monday API token
+	BoardID string // Default board ID for task creation
+}
+
 type Selection struct {
 	Agents                 []AgentID
 	Components             []ComponentID
@@ -11,6 +17,7 @@ type Selection struct {
 	ModelAssignments       map[string]ModelAssignment  // key = sub-agent name (e.g., "sdd-init")
 	ClaudeModelAssignments map[string]ClaudeModelAlias // key = phase name; value = opus|sonnet|haiku
 	Profiles               []Profile                   // named SDD profiles to generate/update during sync
+	Monday                 MondayConfig                // Monday.com integration config
 }
 
 func (s Selection) HasAgent(agent AgentID) bool {

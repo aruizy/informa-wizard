@@ -35,6 +35,7 @@ const (
 	ComponentPermission ComponentID = "permissions"
 	ComponentGGA        ComponentID = "gga"
 	ComponentTheme      ComponentID = "theme"
+	ComponentMonday     ComponentID = "monday"
 )
 
 type SkillID string
@@ -55,7 +56,8 @@ const (
 	SkillJudgmentDay   SkillID = "judgment-day"
 	SkillBranchPR      SkillID = "branch-pr"
 	SkillIssueCreation SkillID = "issue-creation"
-	SkillSkillRegistry SkillID = "skill-registry"
+	SkillSkillRegistry       SkillID = "skill-registry"
+	SkillMiniPRDMonday       SkillID = "mini-prd-creator-monday"
 )
 
 type PersonaID string

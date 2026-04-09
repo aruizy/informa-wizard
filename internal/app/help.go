@@ -6,11 +6,11 @@ import (
 )
 
 func printHelp(w io.Writer, version string) {
-	fmt.Fprintf(w, `gentle-ai — AI Gentle Stack (%s)
+	fmt.Fprintf(w, `informa-wizard — Informa Wizard (%s)
 
 USAGE
-  gentle-ai                     Launch interactive TUI
-  gentle-ai <command> [flags]
+  informa-wizard                     Launch interactive TUI
+  informa-wizard <command> [flags]
 
 COMMANDS
   install      Configure AI coding agents on this machine
@@ -23,7 +23,7 @@ COMMANDS
 FLAGS
   --help, -h    Show this help
 
-Run 'gentle-ai help' for this message.
-Documentation: https://github.com/Gentleman-Programming/gentle-ai
+Run 'informa-wizard help' for this message.
+Documentation: https://github.com/Gentleman-Programming/informa-wizard
 `, version)
 }
