@@ -1,13 +1,10 @@
 <div align="center">
 
-<img width="3276" height="1280" alt="image" src="https://github.com/user-attachments/assets/3a3e4ae1-b9f4-4ce9-8fd0-3833812beb99" />
-
 <h1>Informa Wizard</h1>
 
 <p><strong>One command. Any agent. Any OS. The Informa Wizard ecosystem -- configured and ready.</strong></p>
 
 <p>
-<a href="https://github.com/Gentleman-Programming/informa-wizard/releases"><img src="https://img.shields.io/github/v/release/Gentleman-Programming/informa-wizard" alt="Release"></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
 <img src="https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go&logoColor=white" alt="Go 1.24+">
 <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="Platform">
@@ -19,11 +16,11 @@
 
 ## What It Does
 
-This is NOT an AI agent installer. Most agents are easy to install. This is an **ecosystem configurator** -- it takes whatever AI coding agent(s) you use and supercharges them with the Informa Wizard stack: persistent memory, Spec-Driven Development workflow, curated coding skills, MCP servers, an AI provider switcher, a teaching-oriented persona with security-first permissions, and per-phase model assignment so each SDD step can run on a different model.
+This is an **ecosystem configurator** -- it takes whatever AI coding agent(s) you use and supercharges them with the Informa Wizard stack: persistent memory, Spec-Driven Development workflow, curated coding skills, MCP servers (including Monday.com integration), security-first permissions, and per-phase model assignment so each SDD step can run on a different model.
 
 **Before**: "I installed Claude Code / OpenCode / Cursor, but it's just a chatbot that writes code."
 
-**After**: Your agent now has memory, skills, workflow, MCP tools, and a persona that actually teaches you.
+**After**: Your agent now has memory, skills, workflow, MCP tools, and Monday.com task management integrated into the development cycle.
 
 ### 8 Supported Agents
 
@@ -38,26 +35,15 @@ This is NOT an AI agent installer. Most agents are easy to install. This is an *
 | **Windsurf** | Solo-agent | Plan Mode, Code Mode, native workflows |
 | **Antigravity** | Solo-agent + Mission Control | Built-in Browser/Terminal sub-agents |
 
-> **Note**: This project supersedes [Agent Teams Lite](https://github.com/Gentleman-Programming/agent-teams-lite) (now archived). Everything ATL provided is included here with better installation, automatic updates, and persistent memory.
-
 ---
 
 ## Quick Start
 
-### macOS / Linux
+### Go install (any platform with Go 1.24+)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Gentleman-Programming/informa-wizard/main/scripts/install.sh | bash
+go install gitlab.informa.tools/ai/wizard/informa-wizard/cmd/informa-wizard@latest
 ```
-
-### Windows
-
-```powershell
-scoop bucket add gentleman https://github.com/Gentleman-Programming/scoop-bucket
-scoop install informa-wizard
-```
-
-Or via PowerShell script: `irm https://raw.githubusercontent.com/Gentleman-Programming/informa-wizard/main/scripts/install.ps1 | iex`
 
 ### After install: project-level setup
 
@@ -74,52 +60,40 @@ These are **not required** for basic usage. The SDD orchestrator runs `/sdd-init
 
 ## Install
 
-### Homebrew (macOS / Linux)
-
-```bash
-brew tap Gentleman-Programming/homebrew-tap
-brew install informa-wizard
-```
-
 ### Go install (any platform with Go 1.24+)
 
 ```bash
-go install github.com/gentleman-programming/informa-wizard/cmd/informa-wizard@latest
+go install gitlab.informa.tools/ai/wizard/informa-wizard/cmd/informa-wizard@latest
 ```
 
-### Scoop (Windows)
+### From source
 
-```powershell
-scoop bucket add gentleman https://github.com/Gentleman-Programming/scoop-bucket
-scoop install informa-wizard
+```bash
+git clone https://gitlab.informa.tools/ai/wizard/informa-wizard.git
+cd informa-wizard
+go install ./cmd/informa-wizard
 ```
 
-**Migrating from PowerShell installer to Scoop?** Remove the old binary first:
+---
 
-```powershell
-Remove-Item "$env:LOCALAPPDATA\informa-wizard" -Recurse -Force
-# Then install via Scoop as shown above
+## Monday.com Integration
+
+Informa Wizard includes built-in Monday.com integration. During install, provide your credentials:
+
+```bash
+informa-wizard install --component monday --monday-token "your-api-token" --monday-board "board-id"
 ```
 
-### Windows (PowerShell — alternative)
-
-```powershell
-# Option 1: PowerShell installer (downloads binary from GitHub Releases)
-irm https://raw.githubusercontent.com/Gentleman-Programming/informa-wizard/main/scripts/install.ps1 | iex
-
-# Option 2: Go install (requires Go 1.24+)
-go install github.com/gentleman-programming/informa-wizard/cmd/informa-wizard@latest
-```
-
-### From releases
-
-Download the binary for your platform from [GitHub Releases](https://github.com/Gentleman-Programming/informa-wizard/releases).
+This configures the Monday MCP server for all your agents. The SDD cycle then automatically:
+- **sdd-tasks**: Searches for existing Monday items or creates new ones with subtasks
+- **sdd-apply**: Updates subtask status to Done as tasks are completed
+- **sdd-verify**: Sets the item to Done or Stuck based on verification results
 
 ---
 
 ## Backups
 
-Every install, sync, and upgrade automatically snapshots your config files. Backups are **compressed** (tar.gz), **deduplicated** (identical configs are not re-backed up), and **auto-pruned** (keeps the 5 most recent). Pin important backups via the TUI (`p` key) to protect them from pruning.
+Every install, sync, and upgrade automatically snapshots your agent config directories. Backups are **compressed** (tar.gz), **deduplicated** (identical configs are not re-backed up), and **auto-pruned** (keeps the 5 most recent). Pin important backups via the TUI (`p` key) to protect them from pruning.
 
 See [Backup & Rollback Guide](docs/rollback.md) for details.
 
@@ -132,20 +106,10 @@ See [Backup & Rollback Guide](docs/rollback.md) for details.
 | [Intended Usage](docs/intended-usage.md) | How informa-wizard is meant to be used — the mental model |
 | [Agents](docs/agents.md) | Supported agents, feature matrix, config paths, and per-agent notes |
 | [Components, Skills & Presets](docs/components.md) | All components, GGA behavior, skill catalog, and preset definitions |
-| [Usage](docs/usage.md) | Persona modes, interactive TUI, CLI flags, and dependency management |
+| [Usage](docs/usage.md) | Interactive TUI, CLI flags, and dependency management |
 | [Backup & Rollback](docs/rollback.md) | Backup retention, compression, dedup, pinning, and restore |
 | [Platforms](docs/platforms.md) | Supported platforms, Windows notes, security verification, config paths |
-| [Architecture & Development](docs/architecture.md) | Codebase layout, testing, and relationship to Gentleman.Dots |
-
----
-
-## Contributors
-
-This project exists because of the community. See [CONTRIBUTORS.md](CONTRIBUTORS.md) for the full list.
-
-<a href="https://github.com/Gentleman-Programming/informa-wizard/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=Gentleman-Programming/informa-wizard" />
-</a>
+| [Architecture & Development](docs/architecture.md) | Codebase layout, testing, and development |
 
 ---
 
