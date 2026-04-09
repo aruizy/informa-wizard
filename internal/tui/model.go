@@ -613,8 +613,6 @@ func (m Model) View() string {
 		return screens.RenderDetection(m.Detection, m.Cursor)
 	case ScreenAgents:
 		return screens.RenderAgents(m.Selection.Agents, m.Cursor)
-	case ScreenPersona:
-		return screens.RenderPersona(m.Selection.Persona, m.Cursor)
 	case ScreenPreset:
 		return screens.RenderPreset(m.Selection.Preset, m.Cursor)
 	case ScreenClaudeModelPicker:
@@ -1115,18 +1113,10 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 		case m.Cursor < agentCount:
 			m.toggleCurrentAgent()
 		case m.Cursor == agentCount && len(m.Selection.Agents) > 0:
-			m.setScreen(ScreenPersona)
+			m.setScreen(ScreenPreset)
 		case m.Cursor == agentCount+1:
 			m.setScreen(ScreenDetection)
 		}
-	case ScreenPersona:
-		options := screens.PersonaOptions()
-		if m.Cursor < len(options) {
-			m.Selection.Persona = options[m.Cursor]
-			m.setScreen(ScreenPreset)
-			return m, nil
-		}
-		m.setScreen(ScreenAgents)
 	case ScreenPreset:
 		options := screens.PresetOptions()
 		if m.Cursor < len(options) {
@@ -1149,7 +1139,7 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			m.setScreen(ScreenDependencyTree)
 			return m, nil
 		}
-		m.setScreen(ScreenPersona)
+		m.setScreen(ScreenAgents)
 	case ScreenClaudeModelPicker:
 		if !m.ClaudeModelPicker.InCustomMode && m.Cursor == screens.ClaudeModelPickerOptionCount(m.ClaudeModelPicker)-1 {
 			// "Back" option: in ModelConfigMode return to the config menu,
@@ -2065,8 +2055,6 @@ func (m Model) optionCount() int {
 		return len(screens.DetectionOptions())
 	case ScreenAgents:
 		return len(screens.AgentOptions()) + 2
-	case ScreenPersona:
-		return len(screens.PersonaOptions()) + 1
 	case ScreenPreset:
 		return len(screens.PresetOptions()) + 1
 	case ScreenClaudeModelPicker:
