@@ -515,11 +515,19 @@ func Inject(homeDir string, adapter agents.Adapter, sddMode model.SDDModeID, opt
 			}
 		}
 
-		// Post-check: verify critical agent files exist
+		// Post-check: verify critical agent files exist (supports both
+		// agent.md and .agent.md naming conventions).
 		for _, phase := range []string{"sdd-apply", "sdd-verify"} {
-			checkPath := filepath.Join(agentsDir, phase+".md")
-			if info, err := os.Stat(checkPath); err != nil || info.Size() < 50 {
-				return InjectionResult{}, fmt.Errorf("post-check: cursor agent %q not written correctly", phase)
+			found := false
+			for _, suffix := range []string{".md", ".agent.md"} {
+				checkPath := filepath.Join(agentsDir, phase+suffix)
+				if info, err := os.Stat(checkPath); err == nil && info.Size() >= 50 {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return InjectionResult{}, fmt.Errorf("post-check: agent %q not written correctly in %s", phase, agentsDir)
 			}
 		}
 	}

@@ -4,7 +4,7 @@
       "description": "Implement code changes from task definitions",
       "hidden": true,
       "mode": "subagent",
-      "prompt": "{file:C:\\Users\\aruiz\\AppData\\Local\\Temp\\TestGoldenSDD_OpenCode_Multi4289391245\\001\\.config\\opencode\\prompts\\sdd\\sdd-apply.md}",
+      "prompt": "{file:C:\\Users\\aruiz\\AppData\\Local\\Temp\\TestGoldenSDD_OpenCode_Multi3153170753\\001\\.config\\opencode\\prompts\\sdd\\sdd-apply.md}",
       "tools": {
         "bash": true,
         "edit": true,
@@ -16,7 +16,7 @@
       "description": "Archive completed change artifacts",
       "hidden": true,
       "mode": "subagent",
-      "prompt": "{file:C:\\Users\\aruiz\\AppData\\Local\\Temp\\TestGoldenSDD_OpenCode_Multi4289391245\\001\\.config\\opencode\\prompts\\sdd\\sdd-archive.md}",
+      "prompt": "{file:C:\\Users\\aruiz\\AppData\\Local\\Temp\\TestGoldenSDD_OpenCode_Multi3153170753\\001\\.config\\opencode\\prompts\\sdd\\sdd-archive.md}",
       "tools": {
         "bash": true,
         "edit": true,
@@ -28,7 +28,7 @@
       "description": "Create technical design from proposals",
       "hidden": true,
       "mode": "subagent",
-      "prompt": "{file:C:\\Users\\aruiz\\AppData\\Local\\Temp\\TestGoldenSDD_OpenCode_Multi4289391245\\001\\.config\\opencode\\prompts\\sdd\\sdd-design.md}",
+      "prompt": "{file:C:\\Users\\aruiz\\AppData\\Local\\Temp\\TestGoldenSDD_OpenCode_Multi3153170753\\001\\.config\\opencode\\prompts\\sdd\\sdd-design.md}",
       "tools": {
         "bash": true,
         "edit": true,
@@ -40,7 +40,7 @@
       "description": "Investigate codebase and think through ideas",
       "hidden": true,
       "mode": "subagent",
-      "prompt": "{file:C:\\Users\\aruiz\\AppData\\Local\\Temp\\TestGoldenSDD_OpenCode_Multi4289391245\\001\\.config\\opencode\\prompts\\sdd\\sdd-explore.md}",
+      "prompt": "{file:C:\\Users\\aruiz\\AppData\\Local\\Temp\\TestGoldenSDD_OpenCode_Multi3153170753\\001\\.config\\opencode\\prompts\\sdd\\sdd-explore.md}",
       "tools": {
         "bash": true,
         "edit": true,
@@ -52,7 +52,7 @@
       "description": "Bootstrap SDD context and project configuration",
       "hidden": true,
       "mode": "subagent",
-      "prompt": "{file:C:\\Users\\aruiz\\AppData\\Local\\Temp\\TestGoldenSDD_OpenCode_Multi4289391245\\001\\.config\\opencode\\prompts\\sdd\\sdd-init.md}",
+      "prompt": "{file:C:\\Users\\aruiz\\AppData\\Local\\Temp\\TestGoldenSDD_OpenCode_Multi3153170753\\001\\.config\\opencode\\prompts\\sdd\\sdd-init.md}",
       "tools": {
         "bash": true,
         "edit": true,
@@ -64,7 +64,7 @@
       "description": "Guide user through a complete SDD cycle using their real codebase",
       "hidden": true,
       "mode": "subagent",
-      "prompt": "{file:C:\\Users\\aruiz\\AppData\\Local\\Temp\\TestGoldenSDD_OpenCode_Multi4289391245\\001\\.config\\opencode\\prompts\\sdd\\sdd-onboard.md}",
+      "prompt": "{file:C:\\Users\\aruiz\\AppData\\Local\\Temp\\TestGoldenSDD_OpenCode_Multi3153170753\\001\\.config\\opencode\\prompts\\sdd\\sdd-onboard.md}",
       "tools": {
         "bash": true,
         "edit": true,
@@ -96,7 +96,7 @@
       "description": "Create change proposals from explorations",
       "hidden": true,
       "mode": "subagent",
-      "prompt": "{file:C:\\Users\\aruiz\\AppData\\Local\\Temp\\TestGoldenSDD_OpenCode_Multi4289391245\\001\\.config\\opencode\\prompts\\sdd\\sdd-propose.md}",
+      "prompt": "{file:C:\\Users\\aruiz\\AppData\\Local\\Temp\\TestGoldenSDD_OpenCode_Multi3153170753\\001\\.config\\opencode\\prompts\\sdd\\sdd-propose.md}",
       "tools": {
         "bash": true,
         "edit": true,
@@ -108,7 +108,7 @@
       "description": "Write detailed specifications from proposals",
       "hidden": true,
       "mode": "subagent",
-      "prompt": "{file:C:\\Users\\aruiz\\AppData\\Local\\Temp\\TestGoldenSDD_OpenCode_Multi4289391245\\001\\.config\\opencode\\prompts\\sdd\\sdd-spec.md}",
+      "prompt": "{file:C:\\Users\\aruiz\\AppData\\Local\\Temp\\TestGoldenSDD_OpenCode_Multi3153170753\\001\\.config\\opencode\\prompts\\sdd\\sdd-spec.md}",
       "tools": {
         "bash": true,
         "edit": true,
@@ -120,7 +120,7 @@
       "description": "Break down specs and designs into implementation tasks",
       "hidden": true,
       "mode": "subagent",
-      "prompt": "{file:C:\\Users\\aruiz\\AppData\\Local\\Temp\\TestGoldenSDD_OpenCode_Multi4289391245\\001\\.config\\opencode\\prompts\\sdd\\sdd-tasks.md}",
+      "prompt": "{file:C:\\Users\\aruiz\\AppData\\Local\\Temp\\TestGoldenSDD_OpenCode_Multi3153170753\\001\\.config\\opencode\\prompts\\sdd\\sdd-tasks.md}",
       "tools": {
         "bash": true,
         "edit": true,
@@ -132,7 +132,7 @@
       "description": "Validate implementation against specs",
       "hidden": true,
       "mode": "subagent",
-      "prompt": "{file:C:\\Users\\aruiz\\AppData\\Local\\Temp\\TestGoldenSDD_OpenCode_Multi4289391245\\001\\.config\\opencode\\prompts\\sdd\\sdd-verify.md}",
+      "prompt": "{file:C:\\Users\\aruiz\\AppData\\Local\\Temp\\TestGoldenSDD_OpenCode_Multi3153170753\\001\\.config\\opencode\\prompts\\sdd\\sdd-verify.md}",
       "tools": {
         "bash": true,
         "edit": true,

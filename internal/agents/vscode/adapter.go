@@ -114,6 +114,22 @@ func (a *Adapter) vscodeUserDir(homeDir string) string {
 	}
 }
 
+// --- Sub-agents ---
+// VS Code Copilot supports custom agents via *.agent.md files placed
+// directly in the VS Code User directory.
+
+func (a *Adapter) SupportsSubAgents() bool {
+	return true
+}
+
+func (a *Adapter) SubAgentsDir(homeDir string) string {
+	return a.vscodeUserDir(homeDir)
+}
+
+func (a *Adapter) EmbeddedSubAgentsDir() string {
+	return "vscode/agents"
+}
+
 // --- Optional capabilities ---
 
 func (a *Adapter) SupportsOutputStyles() bool {
