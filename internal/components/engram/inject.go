@@ -250,10 +250,23 @@ func Inject(homeDir string, adapter agents.Adapter) (InjectionResult, error) {
 // from openspec to engram in the prompt content. This is called when the engram
 // component is installed so that the orchestrator prefers engram automatically.
 func promoteEngramDefault(content string) string {
-	content = strings.Replace(content,
-		"If the user doesn't specify, default to `openspec`.",
-		"If the user doesn't specify, default to `engram`.",
-		-1)
+	replacements := [][2]string{
+		{
+			"If the user doesn't specify, default to `openspec`.",
+			"If the user doesn't specify, default to `engram`.",
+		},
+		{
+			"- `openspec` — default; file-based artifacts, committable, shareable with team, full git history\n- `engram` — persistent memory across sessions; use when user explicitly requests",
+			"- `engram` — default; persistent memory across sessions, cross-session recovery\n- `openspec` — file-based artifacts, committable, shareable with team, full git history",
+		},
+		{
+			"- `openspec` — default; file-based artifacts, committable, shareable with team, full git history\n- `engram` — persistent memory across sessions via MCP; use when user explicitly requests",
+			"- `engram` — default; persistent memory across sessions via MCP, cross-session recovery\n- `openspec` — file-based artifacts, committable, shareable with team, full git history",
+		},
+	}
+	for _, r := range replacements {
+		content = strings.Replace(content, r[0], r[1], -1)
+	}
 	return content
 }
 
