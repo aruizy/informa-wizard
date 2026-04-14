@@ -145,14 +145,12 @@ func TestBuildSyncSelectionDefaultScopeIncludesManagedComponents(t *testing.T) {
 	agents := []model.AgentID{model.AgentOpenCode}
 	flags := SyncFlags{}
 
-	sel := BuildSyncSelection(flags, agents)
+	sel := BuildSyncSelection(flags, agents, t.TempDir())
 
-	// Default sync must include: SDD, Engram, Context7, GGA, Skills
+	// Default sync fallback (no state.json) includes: SDD, Context7, Skills
 	mandatoryComponents := []model.ComponentID{
 		model.ComponentSDD,
-		model.ComponentEngram,
 		model.ComponentContext7,
-		model.ComponentGGA,
 		model.ComponentSkills,
 	}
 
@@ -174,7 +172,7 @@ func TestBuildSyncSelectionDefaultExcludesPersonaPermissionsTheme(t *testing.T) 
 	agents := []model.AgentID{model.AgentOpenCode}
 	flags := SyncFlags{}
 
-	sel := BuildSyncSelection(flags, agents)
+	sel := BuildSyncSelection(flags, agents, t.TempDir())
 
 	excluded := []model.ComponentID{
 		model.ComponentPersona,
@@ -195,7 +193,7 @@ func TestBuildSyncSelectionIncludePermissionsWhenFlagSet(t *testing.T) {
 	agents := []model.AgentID{model.AgentClaudeCode}
 	flags := SyncFlags{IncludePermissions: true}
 
-	sel := BuildSyncSelection(flags, agents)
+	sel := BuildSyncSelection(flags, agents, t.TempDir())
 
 	found := false
 	for _, comp := range sel.Components {
@@ -213,7 +211,7 @@ func TestBuildSyncSelectionIncludeThemeWhenFlagSet(t *testing.T) {
 	agents := []model.AgentID{model.AgentClaudeCode}
 	flags := SyncFlags{IncludeTheme: true}
 
-	sel := BuildSyncSelection(flags, agents)
+	sel := BuildSyncSelection(flags, agents, t.TempDir())
 
 	found := false
 	for _, comp := range sel.Components {
@@ -231,7 +229,7 @@ func TestBuildSyncSelectionSDDModeForwarded(t *testing.T) {
 	agents := []model.AgentID{model.AgentOpenCode}
 	flags := SyncFlags{SDDMode: "multi"}
 
-	sel := BuildSyncSelection(flags, agents)
+	sel := BuildSyncSelection(flags, agents, t.TempDir())
 
 	if sel.SDDMode != model.SDDModeMulti {
 		t.Errorf("SDDMode = %q, want %q", sel.SDDMode, model.SDDModeMulti)
@@ -242,7 +240,7 @@ func TestBuildSyncSelectionAgentsForwarded(t *testing.T) {
 	agents := []model.AgentID{model.AgentClaudeCode, model.AgentOpenCode}
 	flags := SyncFlags{}
 
-	sel := BuildSyncSelection(flags, agents)
+	sel := BuildSyncSelection(flags, agents, t.TempDir())
 
 	if !reflect.DeepEqual(sel.Agents, agents) {
 		t.Errorf("Agents = %v, want %v", sel.Agents, agents)
@@ -1412,7 +1410,7 @@ func TestDiscoverAgentsUsesStateFileWhenPresent(t *testing.T) {
 
 	// Write state recording only opencode — even though we also create the
 	// claude-code config dir to simulate the IDE being installed on disk.
-	if err := state.Write(home, []string{"opencode"}); err != nil {
+	if err := state.Write(home, []string{"opencode"}, nil); err != nil {
 		t.Fatalf("state.Write() error = %v", err)
 	}
 
@@ -1465,7 +1463,7 @@ func TestDiscoverAgentsFallsBackToFSDiscoveryWhenStateEmpty(t *testing.T) {
 	home := t.TempDir()
 
 	// Write state with zero agents.
-	if err := state.Write(home, []string{}); err != nil {
+	if err := state.Write(home, []string{}, nil); err != nil {
 		t.Fatalf("state.Write() error = %v", err)
 	}
 
@@ -1495,7 +1493,7 @@ func TestDiscoverAgentsStateMultipleAgents(t *testing.T) {
 	home := t.TempDir()
 
 	agents := []string{"claude-code", "opencode", "gemini-cli"}
-	if err := state.Write(home, agents); err != nil {
+	if err := state.Write(home, agents, nil); err != nil {
 		t.Fatalf("state.Write() error = %v", err)
 	}
 
@@ -1618,13 +1616,13 @@ func TestParseSyncFlagsStrictTDD(t *testing.T) {
 // through to the Selection when building sync selection.
 func TestBuildSyncSelectionStrictTDD(t *testing.T) {
 	flags := SyncFlags{StrictTDD: true}
-	sel := BuildSyncSelection(flags, nil)
+	sel := BuildSyncSelection(flags, nil, t.TempDir())
 	if !sel.StrictTDD {
 		t.Errorf("Selection.StrictTDD = false, want true (should be propagated from flags)")
 	}
 
 	flagsDisabled := SyncFlags{StrictTDD: false}
-	selDisabled := BuildSyncSelection(flagsDisabled, nil)
+	selDisabled := BuildSyncSelection(flagsDisabled, nil, t.TempDir())
 	if selDisabled.StrictTDD {
 		t.Errorf("Selection.StrictTDD = true, want false")
 	}
@@ -1762,7 +1760,7 @@ func TestBuildSyncSelectionProfilesForwarded(t *testing.T) {
 	}
 	flags := SyncFlags{Profiles: []model.Profile{profile}}
 
-	sel := BuildSyncSelection(flags, []model.AgentID{model.AgentOpenCode})
+	sel := BuildSyncSelection(flags, []model.AgentID{model.AgentOpenCode}, t.TempDir())
 
 	if len(sel.Profiles) != 1 {
 		t.Fatalf("BuildSyncSelection() Profiles length = %d, want 1", len(sel.Profiles))

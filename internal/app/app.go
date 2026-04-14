@@ -235,14 +235,18 @@ func tuiExecute(
 
 	execResult := orchestrator.Execute(stagePlan)
 	if execResult.Err == nil {
-		// Persist the user's agent selection so that future `sync` runs target only
-		// the agents the user actually installed, not every IDE config dir on disk.
+		// Persist the user's agent and component selection so that future `sync`
+		// runs target only what the user actually installed.
 		agentIDs := make([]string, 0, len(selection.Agents))
 		for _, a := range selection.Agents {
 			agentIDs = append(agentIDs, string(a))
 		}
+		componentIDs := make([]string, 0, len(selection.Components))
+		for _, c := range selection.Components {
+			componentIDs = append(componentIDs, string(c))
+		}
 		// Non-fatal: a state write failure must not break an otherwise successful install.
-		_ = state.Write(homeDir, agentIDs)
+		_ = state.Write(homeDir, agentIDs, componentIDs)
 	}
 
 	return execResult
@@ -272,7 +276,7 @@ func tuiUpgrade(profile system.PlatformProfile, homeDir string) tui.UpgradeFunc 
 func tuiSync(homeDir string) tui.SyncFunc {
 	return func(overrides *model.SyncOverrides) (int, error) {
 		agentIDs := cli.DiscoverAgents(homeDir)
-		selection := cli.BuildSyncSelection(cli.SyncFlags{}, agentIDs)
+		selection := cli.BuildSyncSelection(cli.SyncFlags{}, agentIDs, homeDir)
 
 		applyOverrides(&selection, overrides)
 

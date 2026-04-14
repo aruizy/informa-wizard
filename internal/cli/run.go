@@ -141,14 +141,18 @@ func RunInstall(args []string, detection system.DetectionResult) (InstallResult,
 		return result, fmt.Errorf("post-apply verification failed:\n%s", verify.RenderReport(result.Verify))
 	}
 
-	// Persist the user's agent selection so that future `sync` runs target only
-	// the agents the user actually installed, not every IDE config dir on disk.
+	// Persist the user's agent and component selection so that future `sync`
+	// runs target only what the user actually installed.
 	agentIDs := make([]string, 0, len(input.Selection.Agents))
 	for _, a := range input.Selection.Agents {
 		agentIDs = append(agentIDs, string(a))
 	}
+	componentIDs := make([]string, 0, len(input.Selection.Components))
+	for _, c := range input.Selection.Components {
+		componentIDs = append(componentIDs, string(c))
+	}
 	// Non-fatal: a state write failure must not break an otherwise successful install.
-	_ = state.Write(homeDir, agentIDs)
+	_ = state.Write(homeDir, agentIDs, componentIDs)
 
 	return result, nil
 }

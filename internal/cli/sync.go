@@ -241,20 +241,15 @@ func parseModelSpec(spec string) (model.ModelAssignment, error) {
 
 // BuildSyncSelection builds a model.Selection for the sync command.
 //
-// Default sync scope: SDD, Engram, Context7, GGA, Skills.
-// Excluded by default: Persona, Permissions, Theme (user-config-adjacent).
+// Sync scope is determined by what the user originally installed (read from
+// state.json). When no persisted components are available, falls back to the
+// default preset components.
 // Permissions and Theme can be opted-in via flags.
 //
 // This is the reusable managed-asset sync contract. A future `upgrade --sync`
 // flow can call this function to get the same managed-only selection semantics.
-func BuildSyncSelection(flags SyncFlags, agentIDs []model.AgentID) model.Selection {
-	components := []model.ComponentID{
-		model.ComponentSDD,
-		model.ComponentEngram,
-		model.ComponentContext7,
-		model.ComponentGGA,
-		model.ComponentSkills,
-	}
+func BuildSyncSelection(flags SyncFlags, agentIDs []model.AgentID, homeDir string) model.Selection {
+	components := DiscoverComponents(homeDir)
 
 	if flags.IncludePermissions {
 		components = append(components, model.ComponentPermission)
@@ -323,6 +318,27 @@ func DiscoverAgents(homeDir string) []model.AgentID {
 		ids = append(ids, a.ID)
 	}
 	return ids
+}
+
+// DiscoverComponents returns the component IDs to sync.
+// Reads from state.json when available; falls back to the default preset.
+func DiscoverComponents(homeDir string) []model.ComponentID {
+	s, err := state.Read(homeDir)
+	if err == nil && len(s.InstalledComponents) > 0 {
+		ids := make([]model.ComponentID, 0, len(s.InstalledComponents))
+		for _, c := range s.InstalledComponents {
+			ids = append(ids, model.ComponentID(c))
+		}
+		return ids
+	}
+
+	// Fallback: default sync-safe components (backward compat for users who
+	// installed before component persistence was added).
+	return []model.ComponentID{
+		model.ComponentSDD,
+		model.ComponentContext7,
+		model.ComponentSkills,
+	}
 }
 
 // syncRuntime mirrors installRuntime but builds a sync-scoped StagePlan.
@@ -657,7 +673,7 @@ func RunSync(args []string) (SyncResult, error) {
 	}
 	agentIDs = unique(agentIDs)
 
-	selection := BuildSyncSelection(flags, agentIDs)
+	selection := BuildSyncSelection(flags, agentIDs, homeDir)
 
 	if flags.DryRun {
 		// Build the plan for inspection, skip execution.
