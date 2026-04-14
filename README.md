@@ -37,7 +37,7 @@ This is an **ecosystem configurator** -- it takes whatever AI coding agent(s) yo
 
 ---
 
-## Quick Start
+## Install
 
 ```bash
 git clone https://gitlab.informa.tools/ai/wizard/informa-wizard.git
@@ -45,7 +45,17 @@ cd informa-wizard
 go install ./cmd/informa-wizard
 ```
 
-### After install: project-level setup
+---
+
+### After install: execute wizard
+
+```bash
+informa-wizard
+```
+
+---
+
+### After wizard install: project-level setup
 
 Once your agents are configured, open your AI agent in a project and run these two commands to register the project context:
 
@@ -55,18 +65,6 @@ Once your agents are configured, open your AI agent in a project and run these t
 | `/skill-registry` | Scans installed skills and project conventions, builds the registry | After installing/removing skills, or first time in a new project |
 
 These are **not required** for basic usage. The SDD orchestrator runs `/sdd-init` automatically if it detects no context. But if something changed in your project (new test runner, new dependencies), re-running them manually ensures the agents have up-to-date context.
-
----
-
-## Install
-
-Requires Go 1.24+.
-
-```bash
-git clone https://gitlab.informa.tools/ai/wizard/informa-wizard.git
-cd informa-wizard
-go install ./cmd/informa-wizard
-```
 
 ---
 
