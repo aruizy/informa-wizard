@@ -231,9 +231,10 @@ func Inject(homeDir string, adapter agents.Adapter) (InjectionResult, error) {
 
 		updated := filemerge.InjectMarkdownSection(existing, "engram-protocol", protocolContent)
 
-		// 3. When engram is installed, promote it as the default artifact store
-		// in the SDD orchestrator section (replaces the openspec default).
-		updated = promoteEngramDefault(updated)
+		// 3. When engram is installed, overwrite the artifact store policy
+		// marker section to promote engram as the default.
+		engramPolicy := assets.MustRead("common/artifact-store-engram.md")
+		updated = filemerge.InjectMarkdownSection(updated, "artifact-store-policy", engramPolicy)
 
 		mdWrite, err := filemerge.WriteFileAtomic(promptPath, []byte(updated), 0o644)
 		if err != nil {
@@ -244,30 +245,6 @@ func Inject(homeDir string, adapter agents.Adapter) (InjectionResult, error) {
 	}
 
 	return InjectionResult{Changed: changed, Files: files}, nil
-}
-
-// promoteEngramDefault rewrites the SDD orchestrator's artifact store default
-// from openspec to engram in the prompt content. This is called when the engram
-// component is installed so that the orchestrator prefers engram automatically.
-func promoteEngramDefault(content string) string {
-	replacements := [][2]string{
-		{
-			"If the user doesn't specify, default to `openspec`.",
-			"If the user doesn't specify, default to `engram`.",
-		},
-		{
-			"- `openspec` — default; file-based artifacts, committable, shareable with team, full git history\n- `engram` — persistent memory across sessions; use when user explicitly requests",
-			"- `engram` — default; persistent memory across sessions, cross-session recovery\n- `openspec` — file-based artifacts, committable, shareable with team, full git history",
-		},
-		{
-			"- `openspec` — default; file-based artifacts, committable, shareable with team, full git history\n- `engram` — persistent memory across sessions via MCP; use when user explicitly requests",
-			"- `engram` — default; persistent memory across sessions via MCP, cross-session recovery\n- `openspec` — file-based artifacts, committable, shareable with team, full git history",
-		},
-	}
-	for _, r := range replacements {
-		content = strings.Replace(content, r[0], r[1], -1)
-	}
-	return content
 }
 
 // writeCodexInstructionFiles writes the Engram memory protocol and compact prompt

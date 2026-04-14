@@ -873,6 +873,13 @@ func sddOrchestratorAsset(agent model.AgentID) string {
 	}
 }
 
+// defaultArtifactStorePolicy returns the openspec-default artifact store policy.
+// This is injected into the "artifact-store-policy" marker section by SDD.
+// When engram is installed later, it overwrites this section with the engram variant.
+func defaultArtifactStorePolicy() string {
+	return assets.MustRead("common/artifact-store-openspec.md")
+}
+
 func injectFileAppend(homeDir string, adapter agents.Adapter) (InjectionResult, error) {
 	promptPath := adapter.SystemPromptFile(homeDir)
 
@@ -895,6 +902,7 @@ func injectFileAppend(homeDir string, adapter agents.Adapter) (InjectionResult, 
 	}
 
 	updated := filemerge.InjectMarkdownSection(existing, "sdd-orchestrator", content)
+	updated = filemerge.InjectMarkdownSection(updated, "artifact-store-policy", defaultArtifactStorePolicy())
 
 	writeResult, err := filemerge.WriteFileAtomic(promptPath, []byte(updated), 0o644)
 	if err != nil {
@@ -1102,6 +1110,7 @@ func injectMarkdownSections(homeDir string, adapter agents.Adapter, assignments 
 	}
 
 	updated := filemerge.InjectMarkdownSection(existing, "sdd-orchestrator", content)
+	updated = filemerge.InjectMarkdownSection(updated, "artifact-store-policy", defaultArtifactStorePolicy())
 
 	writeResult, err := filemerge.WriteFileAtomic(promptPath, []byte(updated), 0o644)
 	if err != nil {
