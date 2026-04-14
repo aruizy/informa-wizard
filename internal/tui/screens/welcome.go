@@ -3,6 +3,7 @@ package screens
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/tui/styles"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/update"
@@ -50,13 +51,18 @@ func WelcomeOptions(updateResults []update.UpdateResult, updateCheckDone bool, s
 	return opts
 }
 
-func RenderWelcome(cursor int, version string, updateBanner string, updateResults []update.UpdateResult, updateCheckDone bool, showProfiles bool, profileCount int, hasEngines bool) string {
+func RenderWelcome(cursor int, version string, updateBanner string, updateResults []update.UpdateResult, updateCheckDone bool, showProfiles bool, profileCount int, hasEngines bool, commitDate *time.Time) string {
 	var b strings.Builder
 
 	b.WriteString(styles.RenderLogo())
 	b.WriteString("\n\n")
 	b.WriteString(styles.SubtextStyle.Render(styles.Tagline(version)))
 	b.WriteString("\n")
+
+	if commitDate != nil {
+		b.WriteString(styles.SubtextStyle.Render(fmt.Sprintf("Last update: %s", commitDate.Local().Format("2006-01-02 15:04"))))
+		b.WriteString("\n")
+	}
 
 	if updateBanner != "" {
 		b.WriteString(styles.WarningStyle.Render(updateBanner))

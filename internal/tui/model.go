@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -336,6 +337,10 @@ type Model struct {
 
 	// AgentBuilder holds the transient state for the agent-builder TUI flow.
 	AgentBuilder AgentBuilderState
+
+	// CommitDate is the date of the last git commit embedded in the binary.
+	// Nil for dev builds or when build info is unavailable.
+	CommitDate *time.Time
 }
 
 func NewModel(detection system.DetectionResult, version string) Model {
@@ -347,10 +352,11 @@ func NewModel(detection system.DetectionResult, version string) Model {
 	}
 
 	return Model{
-		Screen:    ScreenWelcome,
-		Version:   version,
-		Selection: selection,
-		Detection: detection,
+		Screen:        ScreenWelcome,
+		Version:       version,
+		Selection:     selection,
+		Detection:     detection,
+		CommitDate: resolveCommitDate(),
 		Progress: NewProgressState([]string{
 			"Install dependencies",
 			"Configure selected agents",
@@ -595,7 +601,7 @@ func (m Model) View() string {
 		if m.UpdateCheckDone && update.HasUpdates(m.UpdateResults) {
 			banner = "Updates available: " + update.UpdateSummaryLine(m.UpdateResults)
 		}
-		return screens.RenderWelcome(m.Cursor, m.Version, banner, m.UpdateResults, m.UpdateCheckDone, m.hasDetectedOpenCode(), len(m.ProfileList), m.hasAgentBuilderEngines())
+		return screens.RenderWelcome(m.Cursor, m.Version, banner, m.UpdateResults, m.UpdateCheckDone, m.hasDetectedOpenCode(), len(m.ProfileList), m.hasAgentBuilderEngines(), m.CommitDate)
 	case ScreenUpgrade:
 		return screens.RenderUpgrade(m.UpdateResults, m.UpgradeReport, m.UpgradeErr, m.OperationRunning, m.UpdateCheckDone, m.Cursor, m.SpinnerFrame)
 	case ScreenSync:
@@ -2486,6 +2492,25 @@ func hasSelectedComponent(components []model.ComponentID, target model.Component
 // disabled for these screens to avoid confusing the scroll offset logic.
 func (m Model) isScrollableScreen() bool {
 	return m.Screen == ScreenBackups
+}
+
+// resolveCommitDate returns the date of the last commit embedded by the Go
+// toolchain (vcs.time build setting). Returns nil for dev builds or when
+// build info is unavailable.
+func resolveCommitDate() *time.Time {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return nil
+	}
+	for _, s := range info.Settings {
+		if s.Key == "vcs.time" {
+			t, err := time.Parse(time.RFC3339, s.Value)
+			if err == nil {
+				return &t
+			}
+		}
+	}
+	return nil
 }
 
 // handleProfileNameInput processes key events when the profile create screen
