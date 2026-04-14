@@ -75,7 +75,7 @@ go install ./cmd/informa-wizard
 [Engram](https://github.com/gentleman-programming/engram) provides persistent memory across sessions. It is **not required** — the default artifact store is `openspec` (file-based, committable). Enable engram when you want cross-session memory recovery:
 
 ```bash
-informa-wizard install --components engram,sdd,skills
+informa-wizard install --components engram
 ```
 
 Or add it later to an existing installation through the TUI (select "Custom" preset and toggle the Engram component).
