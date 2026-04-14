@@ -2,21 +2,21 @@
 set -euo pipefail
 
 # ============================================================================
-# gentle-ai — Install Script
+# informa-wizard — Install Script
 # One command to configure any AI coding agent on any OS.
 #
 # Usage:
-#   curl -sL https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/scripts/install.sh | bash
+#   curl -sL https://raw.githubusercontent.com/Gentleman-Programming/informa-wizard/main/scripts/install.sh | bash
 #
 # Or download and run:
-#   curl -sLO https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/scripts/install.sh
+#   curl -sLO https://raw.githubusercontent.com/Gentleman-Programming/informa-wizard/main/scripts/install.sh
 #   chmod +x install.sh
 #   ./install.sh
 # ============================================================================
 
 GITHUB_OWNER="Gentleman-Programming"
-GITHUB_REPO="gentle-ai"
-BINARY_NAME="gentle-ai"
+GITHUB_REPO="informa-wizard"
+BINARY_NAME="informa-wizard"
 BREW_TAP="Gentleman-Programming/homebrew-tap"
 
 # ============================================================================
@@ -55,7 +55,7 @@ step()    { echo -e "\n${CYAN}${BOLD}==>${NC} ${BOLD}$*${NC}"; }
 
 show_help() {
     cat <<EOF
-${BOLD}gentle-ai installer${NC}
+${BOLD}informa-wizard installer${NC}
 
 Usage: install.sh [OPTIONS]
 
@@ -111,8 +111,8 @@ detect_platform() {
 # GoReleaser v2 {{ .Os }} produces GOOS values (lowercase: darwin, linux)
 # GoReleaser {{ .Arch }} produces GOARCH values (amd64, arm64)
 # Examples:
-#   gentle-ai_1.0.0_darwin_arm64.tar.gz
-#   gentle-ai_1.0.0_linux_amd64.tar.gz
+#   informa-wizard_1.0.0_darwin_arm64.tar.gz
+#   informa-wizard_1.0.0_linux_amd64.tar.gz
 # ============================================================================
 
 get_archive_name() {

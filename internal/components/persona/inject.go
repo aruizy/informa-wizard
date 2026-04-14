@@ -55,7 +55,7 @@ func Inject(homeDir string, adapter agents.Adapter, persona model.PersonaID) (In
 		// Auto-heal: strip any legacy free-text Gentleman persona block that was
 		// written before the marker-based injection system existed. This prevents
 		// duplicate persona content when users re-run the installer after an old
-		// install placed the persona as raw text above the <!-- gentle-ai: --> markers.
+		// install placed the persona as raw text above the <!-- informa-wizard: --> markers.
 		healed := filemerge.StripLegacyPersonaBlock(existing)
 
 		// Also strip legacy Agent Teams Lite block (standalone ATL installer leftover).
@@ -268,7 +268,7 @@ var osReadFile = func(path string) ([]byte, error) {
 }
 
 // preserveManagedSections checks whether the existing file content has
-// gentle-ai managed sections (SDD orchestrator, engram protocol, etc.) and
+// informa-wizard managed sections (SDD orchestrator, engram protocol, etc.) and
 // returns new content that preserves those sections while replacing only the
 // persona text before them. Returns ("", false) when no preservation is needed
 // (empty file, Gentleman persona, or no managed markers found).
@@ -277,7 +277,7 @@ func preserveManagedSections(existing, newPersona string, persona model.PersonaI
 		return "", false
 	}
 
-	idx := strings.Index(existing, "<!-- gentle-ai:")
+	idx := strings.Index(existing, "<!-- informa-wizard:")
 	if idx < 0 {
 		return "", false
 	}

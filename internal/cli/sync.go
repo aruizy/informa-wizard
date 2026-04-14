@@ -286,7 +286,7 @@ func BuildSyncSelection(flags SyncFlags, agentIDs []model.AgentID) model.Selecti
 // DiscoverAgents returns the agent IDs to sync.
 //
 // Discovery order:
-//  1. Persisted state (~/.gentle-ai/state.json) — written at install time.
+//  1. Persisted state (~/.informa-wizard/state.json) — written at install time.
 //     When present and non-empty, only the agents the user explicitly installed
 //     are returned. This prevents sync from injecting into every IDE config dir
 //     that happens to exist on the system (issue #107).
@@ -339,7 +339,7 @@ type syncRuntime struct {
 }
 
 func newSyncRuntime(homeDir string, selection model.Selection) (*syncRuntime, error) {
-	backupRoot := filepath.Join(homeDir, ".gentle-ai", "backups")
+	backupRoot := filepath.Join(homeDir, ".informa-wizard", "backups")
 	if err := os.MkdirAll(backupRoot, 0o755); err != nil {
 		return nil, fmt.Errorf("create backup root directory %q: %w", backupRoot, err)
 	}
@@ -699,7 +699,7 @@ func RenderSyncReport(result SyncResult) string {
 	var b strings.Builder
 
 	if result.NoOp {
-		fmt.Fprintln(&b, "gentle-ai sync — no managed sync actions needed")
+		fmt.Fprintln(&b, "informa-wizard sync — no managed sync actions needed")
 		if len(result.Agents) == 0 {
 			fmt.Fprintln(&b, "No agents were discovered or specified. Nothing to sync.")
 		} else {
@@ -710,7 +710,7 @@ func RenderSyncReport(result SyncResult) string {
 	}
 
 	if result.DryRun {
-		fmt.Fprintln(&b, "gentle-ai sync — dry-run")
+		fmt.Fprintln(&b, "informa-wizard sync — dry-run")
 		fmt.Fprintf(&b, "Agents: %s\n", joinAgentIDs(result.Agents))
 
 		compParts := make([]string, 0, len(result.Selection.Components))
@@ -725,7 +725,7 @@ func RenderSyncReport(result SyncResult) string {
 		return strings.TrimRight(b.String(), "\n")
 	}
 
-	fmt.Fprintln(&b, "gentle-ai sync — managed sync executed")
+	fmt.Fprintln(&b, "informa-wizard sync — managed sync executed")
 	fmt.Fprintf(&b, "Agents synced: %s\n", joinAgentIDs(result.Agents))
 
 	compParts := make([]string, 0, len(result.Selection.Components))

@@ -1,5 +1,5 @@
 ---
-name: gentle-ai-issue-creation
+name: informa-wizard-issue-creation
 description: >
   Issue creation workflow for Gentle AI following the issue-first enforcement system.
   Trigger: When creating a GitHub issue, reporting a bug, or requesting a feature.
@@ -16,21 +16,21 @@ metadata:
 Load this skill whenever you need to:
 - Report a bug in `gga`
 - Request a new feature or enhancement
-- Open any GitHub issue on the [Gentleman-Programming/gentle-ai](https://github.com/Gentleman-Programming/gentle-ai) repository
+- Open any GitHub issue on the [Gentleman-Programming/informa-wizard](https://github.com/Gentleman-Programming/informa-wizard) repository
 
 ## Critical Rules
 
 1. **Blank issues are DISABLED** — `blank_issues_enabled: false` in `.github/ISSUE_TEMPLATE/config.yml`. You MUST use a template.
 2. **`status:needs-review` is applied automatically** — every new issue gets this label; you do NOT add it manually.
 3. **`status:approved` is REQUIRED before ANY work begins** — a maintainer must label the issue before you or anyone opens a PR.
-4. **Questions go to Discussions** — use [GitHub Discussions](https://github.com/Gentleman-Programming/gentle-ai/discussions), NOT issues, for questions and general conversation.
+4. **Questions go to Discussions** — use [GitHub Discussions](https://github.com/Gentleman-Programming/informa-wizard/discussions), NOT issues, for questions and general conversation.
 5. **No Co-Authored-By trailers** — never add AI attribution to commits.
 
 ## Workflow
 
 ```
 1. Search existing issues → confirm it's not a duplicate
-   https://github.com/Gentleman-Programming/gentle-ai/issues
+   https://github.com/Gentleman-Programming/informa-wizard/issues
 
 2. Choose the correct template:
    - Bug   → .github/ISSUE_TEMPLATE/bug_report.yml
@@ -74,14 +74,14 @@ Load this skill whenever you need to:
 
 ```bash
 gh issue create \
-  --repo Gentleman-Programming/gentle-ai \
+  --repo Gentleman-Programming/informa-wizard \
   --template bug_report.yml \
   --title "fix(agent): Claude Code not detected on Linux Arch"
 ```
 
 Or open the web form directly:
 ```
-https://github.com/Gentleman-Programming/gentle-ai/issues/new?template=bug_report.yml
+https://github.com/Gentleman-Programming/informa-wizard/issues/new?template=bug_report.yml
 ```
 
 ---
@@ -106,14 +106,14 @@ https://github.com/Gentleman-Programming/gentle-ai/issues/new?template=bug_repor
 
 ```bash
 gh issue create \
-  --repo Gentleman-Programming/gentle-ai \
+  --repo Gentleman-Programming/informa-wizard \
   --template feature_request.yml \
   --title "feat(tui): add keyboard shortcut help overlay"
 ```
 
 Or open the web form directly:
 ```
-https://github.com/Gentleman-Programming/gentle-ai/issues/new?template=feature_request.yml
+https://github.com/Gentleman-Programming/informa-wizard/issues/new?template=feature_request.yml
 ```
 
 ---
@@ -188,7 +188,7 @@ PR opened with `Closes #<N>`
 ```
 Do you have a question or idea to discuss?
 ├── YES → GitHub Discussions (NOT issues)
-│         https://github.com/Gentleman-Programming/gentle-ai/discussions
+│         https://github.com/Gentleman-Programming/informa-wizard/discussions
 └── NO  → Is it a defect in gga?
           ├── YES → Bug Report template
           └── NO  → Feature Request template
@@ -207,17 +207,17 @@ Do you have a question or idea to discuss?
 
 ```bash
 # Search open issues
-gh issue list --repo Gentleman-Programming/gentle-ai --state open --search "your keywords"
+gh issue list --repo Gentleman-Programming/informa-wizard --state open --search "your keywords"
 
 # Search all issues including closed
-gh issue list --repo Gentleman-Programming/gentle-ai --state all --search "your keywords"
+gh issue list --repo Gentleman-Programming/informa-wizard --state all --search "your keywords"
 ```
 
 ### Create a Bug Report
 
 ```bash
 gh issue create \
-  --repo Gentleman-Programming/gentle-ai \
+  --repo Gentleman-Programming/informa-wizard \
   --template bug_report.yml \
   --title "fix(<scope>): <short description>"
 ```
@@ -226,7 +226,7 @@ gh issue create \
 
 ```bash
 gh issue create \
-  --repo Gentleman-Programming/gentle-ai \
+  --repo Gentleman-Programming/informa-wizard \
   --template feature_request.yml \
   --title "feat(<scope>): <short description>"
 ```
@@ -234,7 +234,7 @@ gh issue create \
 ### Check Issue Status
 
 ```bash
-gh issue view <number> --repo Gentleman-Programming/gentle-ai
+gh issue view <number> --repo Gentleman-Programming/informa-wizard
 ```
 
 ### Valid Scopes for Issue Titles

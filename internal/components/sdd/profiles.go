@@ -289,8 +289,8 @@ func buildProfileOrchestratorPrompt(profile model.Profile) (string, error) {
 	base := assets.MustRead("generic/sdd-orchestrator.md")
 
 	// Inject model assignments table.
-	const openMarker = "<!-- gentle-ai:sdd-model-assignments -->"
-	const closeMarker = "<!-- /gentle-ai:sdd-model-assignments -->"
+	const openMarker = "<!-- informa-wizard:sdd-model-assignments -->"
+	const closeMarker = "<!-- /informa-wizard:sdd-model-assignments -->"
 
 	start := strings.Index(base, openMarker)
 	end := strings.Index(base, closeMarker)

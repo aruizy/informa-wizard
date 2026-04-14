@@ -24,11 +24,11 @@ func TestResolverAddsMissingDependenciesInOrder(t *testing.T) {
 		t.Fatalf("Resolve() agents = %v", plan.Agents)
 	}
 
-	if !reflect.DeepEqual(plan.OrderedComponents, []model.ComponentID{model.ComponentEngram, model.ComponentSDD, model.ComponentSkills}) {
+	if !reflect.DeepEqual(plan.OrderedComponents, []model.ComponentID{model.ComponentSDD, model.ComponentSkills}) {
 		t.Fatalf("Resolve() ordered components = %v", plan.OrderedComponents)
 	}
 
-	if !reflect.DeepEqual(plan.AddedDependencies, []model.ComponentID{model.ComponentEngram, model.ComponentSDD}) {
+	if !reflect.DeepEqual(plan.AddedDependencies, []model.ComponentID{model.ComponentSDD}) {
 		t.Fatalf("Resolve() added dependencies = %v", plan.AddedDependencies)
 	}
 }
@@ -45,12 +45,12 @@ func TestResolverPersonaOrderedBeforeEngramAndSDDWhenSelected(t *testing.T) {
 		t.Fatalf("Resolve() returned error: %v", err)
 	}
 
-	if !reflect.DeepEqual(plan.OrderedComponents, []model.ComponentID{model.ComponentPersona, model.ComponentEngram, model.ComponentSDD}) {
+	if !reflect.DeepEqual(plan.OrderedComponents, []model.ComponentID{model.ComponentPersona, model.ComponentSDD}) {
 		t.Fatalf("Resolve() ordered components = %v", plan.OrderedComponents)
 	}
 
-	if !reflect.DeepEqual(plan.AddedDependencies, []model.ComponentID{model.ComponentEngram}) {
-		t.Fatalf("Resolve() added dependencies = %v", plan.AddedDependencies)
+	if len(plan.AddedDependencies) != 0 {
+		t.Fatalf("Resolve() added dependencies = %v, want none", plan.AddedDependencies)
 	}
 }
 

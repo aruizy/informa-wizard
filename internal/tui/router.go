@@ -16,6 +16,7 @@ var linearRoutes = map[Screen]Route{
 	ScreenModelPicker:            {Forward: ScreenStrictTDD, Backward: ScreenSDDMode},
 	ScreenDependencyTree:         {Forward: ScreenReview, Backward: ScreenPreset},
 	ScreenSkillPicker:            {Forward: ScreenReview, Backward: ScreenDependencyTree},
+	ScreenMonday:                 {Forward: ScreenReview, Backward: ScreenDependencyTree},
 	ScreenReview:                 {Forward: ScreenInstalling, Backward: ScreenDependencyTree},
 	ScreenInstalling:             {Forward: ScreenComplete, Backward: ScreenReview},
 	ScreenComplete:               {Backward: ScreenInstalling},

@@ -5,7 +5,7 @@ Use non-interactive mode for CI, scripts, or reproducible local setup.
 ## Command
 
 ```bash
-go run ./cmd/gentle-ai install [flags]
+go run ./cmd/informa-wizard install [flags]
 ```
 
 ## Supported flags
@@ -35,7 +35,7 @@ The `--dry-run` output includes a `Platform decision` line showing `os`, `distro
 macOS (or any supported platform — same flags, platform is auto-detected):
 
 ```bash
-go run ./cmd/gentle-ai install \
+go run ./cmd/informa-wizard install \
   --agent claude-code,opencode \
   --component engram,sdd,skills \
   --skill sdd-apply \

@@ -126,7 +126,7 @@ func runRestoreWithHomeDir(args []string, restorer RestoreFunc, stdout io.Writer
 // renderRestoreList writes the backup listing to stdout.
 // Backups are already sorted newest-first by listBackupsFromDir.
 // Each entry shows: index, ID, DisplayLabel (source + timestamp + file count),
-// and the gentle-ai version that created the backup when known.
+// and the informa-wizard version that created the backup when known.
 func renderRestoreList(backups []backup.Manifest, stdout io.Writer) error {
 	if len(backups) == 0 {
 		fmt.Fprintln(stdout, "no backups found")

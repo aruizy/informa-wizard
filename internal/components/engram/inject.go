@@ -140,10 +140,10 @@ func Inject(homeDir string, adapter agents.Adapter) (InjectionResult, error) {
 	switch adapter.MCPStrategy() {
 	case model.StrategySeparateMCPFiles:
 		// Engram v1.10.3+ writes an absolute path for the command field when
-		// `engram setup <agent>` is invoked. gentle-ai's Inject() runs after
+		// `engram setup <agent>` is invoked. informa-wizard's Inject() runs after
 		// engram setup, so we must preserve any absolute command path already
 		// present instead of silently overwriting it with the relative "engram".
-		// See: https://github.com/Gentleman-Programming/gentle-ai/issues (engram absolute path regression)
+		// See: https://github.com/Gentleman-Programming/informa-wizard/issues (engram absolute path regression)
 		mcpPath := adapter.MCPConfigPath(homeDir, "engram")
 		content := buildSeparateMCPContent(mcpPath, engramServerJSON())
 		mcpWrite, err := filemerge.WriteFileAtomic(mcpPath, content, 0o644)
@@ -221,46 +221,40 @@ func Inject(homeDir string, adapter agents.Adapter) (InjectionResult, error) {
 
 	// 2. Inject Engram memory protocol into system prompt (if supported).
 	if adapter.SupportsSystemPrompt() {
-		switch adapter.SystemPromptStrategy() {
-		case model.StrategyMarkdownSections:
-			promptPath := adapter.SystemPromptFile(homeDir)
-			protocolContent := assets.MustRead("claude/engram-protocol.md")
+		promptPath := adapter.SystemPromptFile(homeDir)
+		protocolContent := assets.MustRead("claude/engram-protocol.md")
 
-			existing, err := readFileOrEmpty(promptPath)
-			if err != nil {
-				return InjectionResult{}, err
-			}
-
-			updated := filemerge.InjectMarkdownSection(existing, "engram-protocol", protocolContent)
-
-			mdWrite, err := filemerge.WriteFileAtomic(promptPath, []byte(updated), 0o644)
-			if err != nil {
-				return InjectionResult{}, err
-			}
-			changed = changed || mdWrite.Changed
-			files = append(files, promptPath)
-
-		default:
-			promptPath := adapter.SystemPromptFile(homeDir)
-			protocolContent := assets.MustRead("claude/engram-protocol.md")
-
-			existing, err := readFileOrEmpty(promptPath)
-			if err != nil {
-				return InjectionResult{}, err
-			}
-
-			updated := filemerge.InjectMarkdownSection(existing, "engram-protocol", protocolContent)
-
-			mdWrite, err := filemerge.WriteFileAtomic(promptPath, []byte(updated), 0o644)
-			if err != nil {
-				return InjectionResult{}, err
-			}
-			changed = changed || mdWrite.Changed
-			files = append(files, promptPath)
+		existing, err := readFileOrEmpty(promptPath)
+		if err != nil {
+			return InjectionResult{}, err
 		}
+
+		updated := filemerge.InjectMarkdownSection(existing, "engram-protocol", protocolContent)
+
+		// 3. When engram is installed, promote it as the default artifact store
+		// in the SDD orchestrator section (replaces the openspec default).
+		updated = promoteEngramDefault(updated)
+
+		mdWrite, err := filemerge.WriteFileAtomic(promptPath, []byte(updated), 0o644)
+		if err != nil {
+			return InjectionResult{}, err
+		}
+		changed = changed || mdWrite.Changed
+		files = append(files, promptPath)
 	}
 
 	return InjectionResult{Changed: changed, Files: files}, nil
+}
+
+// promoteEngramDefault rewrites the SDD orchestrator's artifact store default
+// from openspec to engram in the prompt content. This is called when the engram
+// component is installed so that the orchestrator prefers engram automatically.
+func promoteEngramDefault(content string) string {
+	content = strings.Replace(content,
+		"If the user doesn't specify, default to `openspec`.",
+		"If the user doesn't specify, default to `engram`.",
+		-1)
+	return content
 }
 
 // writeCodexInstructionFiles writes the Engram memory protocol and compact prompt
@@ -329,7 +323,7 @@ func readFileOrEmpty(path string) (string, error) {
 // Code).
 //
 // Engram v1.10.3+ writes an absolute command path when `engram setup` is run.
-// gentle-ai runs Inject() after setup, so we must not overwrite that absolute
+// informa-wizard runs Inject() after setup, so we must not overwrite that absolute
 // path with the relative "engram" string from defaultEngramServerJSON.
 //
 // Logic:

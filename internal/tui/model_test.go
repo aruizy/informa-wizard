@@ -65,8 +65,8 @@ func TestAgentSelectionToggleAndContinue(t *testing.T) {
 	updated, _ = state.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	state = updated.(Model)
 
-	if state.Screen != ScreenPersona {
-		t.Fatalf("screen = %v, want %v", state.Screen, ScreenPersona)
+	if state.Screen != ScreenPreset {
+		t.Fatalf("screen = %v, want %v", state.Screen, ScreenPreset)
 	}
 }
 
@@ -2351,9 +2351,9 @@ func TestClaudeModelPickerBackRowExitCustomModeResetsCursor(t *testing.T) {
 // Closes #150.
 func TestWrapAroundDownAtLast(t *testing.T) {
 	m := NewModel(system.DetectionResult{}, "dev")
-	m.Screen = ScreenPersona
+	m.Screen = ScreenPreset
 
-	// optionCount() for ScreenPersona = len(PersonaOptions()) + 1 (Back).
+	// optionCount() for ScreenPreset = len(PresetOptions()).
 	last := m.optionCount() - 1
 	m.Cursor = last
 
@@ -2371,7 +2371,7 @@ func TestWrapAroundDownAtLast(t *testing.T) {
 // Closes #150.
 func TestWrapAroundUpAtFirst(t *testing.T) {
 	m := NewModel(system.DetectionResult{}, "dev")
-	m.Screen = ScreenPersona
+	m.Screen = ScreenPreset
 	m.Cursor = 0
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
@@ -2388,7 +2388,7 @@ func TestWrapAroundUpAtFirst(t *testing.T) {
 // Closes #150.
 func TestWrapAroundDownAtLastWithArrowKey(t *testing.T) {
 	m := NewModel(system.DetectionResult{}, "dev")
-	m.Screen = ScreenPersona
+	m.Screen = ScreenPreset
 	last := m.optionCount() - 1
 	m.Cursor = last
 
@@ -2405,7 +2405,7 @@ func TestWrapAroundDownAtLastWithArrowKey(t *testing.T) {
 // Closes #150.
 func TestWrapAroundUpAtFirstWithArrowKey(t *testing.T) {
 	m := NewModel(system.DetectionResult{}, "dev")
-	m.Screen = ScreenPersona
+	m.Screen = ScreenPreset
 	m.Cursor = 0
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})

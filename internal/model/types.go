@@ -72,7 +72,7 @@ const (
 type SystemPromptStrategy int
 
 const (
-	// StrategyMarkdownSections uses <!-- gentle-ai:ID --> markers to inject sections
+	// StrategyMarkdownSections uses <!-- informa-wizard:ID --> markers to inject sections
 	// into an existing file without clobbering user content (Claude Code CLAUDE.md).
 	StrategyMarkdownSections SystemPromptStrategy = iota
 	// StrategyFileReplace replaces the entire system prompt file (OpenCode AGENTS.md).

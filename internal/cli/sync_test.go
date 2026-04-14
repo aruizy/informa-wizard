@@ -824,7 +824,7 @@ func TestRenderSyncReportIncludesManagedActions(t *testing.T) {
 
 // TestRunSyncExcludesUnmanagedLookalikeFile verifies the spec scenario:
 // "User modified an unmanaged file that resembles a managed target —
-// gentle-ai sync excludes it from the plan and does not adopt it."
+// informa-wizard sync excludes it from the plan and does not adopt it."
 //
 // We create a file with the same NAME as a managed target but in a directory
 // that is NOT part of the managed inventory (simulating an unmanaged lookalike).
@@ -840,7 +840,7 @@ func TestRunSyncExcludesUnmanagedLookalikeFile(t *testing.T) {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
 	lookalikePath := filepath.Join(lookalikeDir, "AGENTS.md")
-	const lookalikeContent = "# My project AGENTS.md — NOT managed by gentle-ai"
+	const lookalikeContent = "# My project AGENTS.md — NOT managed by informa-wizard"
 	if err := os.WriteFile(lookalikePath, []byte(lookalikeContent), 0o644); err != nil {
 		t.Fatalf("WriteFile() lookalike error = %v", err)
 	}

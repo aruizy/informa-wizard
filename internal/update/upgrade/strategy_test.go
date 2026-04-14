@@ -179,7 +179,7 @@ func TestRunStrategy_GoInstallFailure(t *testing.T) {
 // --- TestRunStrategy_BinaryWindowsSelfUpdateSkipped ---
 
 // TestRunStrategy_BinaryWindowsSelfUpdateSkipped verifies that the Windows binary
-// self-replace for gentle-ai is NOT attempted in Phase 1 — it must return a
+// self-replace for informa-wizard is NOT attempted in Phase 1 — it must return a
 // manual hint error, not execute.
 func TestRunStrategy_BinaryWindowsSelfUpdateSkipped(t *testing.T) {
 	origExecCommand := execCommand
@@ -197,7 +197,7 @@ func TestRunStrategy_BinaryWindowsSelfUpdateSkipped(t *testing.T) {
 			InstallMethod: update.InstallBinary,
 		},
 		LatestVersion: "1.5.0",
-		ReleaseURL:    "https://github.com/Gentleman-Programming/gentle-ai/releases/tag/v1.5.0",
+		ReleaseURL:    "https://github.com/Gentleman-Programming/informa-wizard/releases/tag/v1.5.0",
 	}
 	profile := system.PlatformProfile{OS: "windows", PackageManager: "winget"}
 
@@ -280,7 +280,7 @@ func TestManualFallbackHint(t *testing.T) {
 			InstallMethod: update.InstallBinary,
 		},
 		LatestVersion: "1.5.0",
-		UpdateHint:    "See https://github.com/Gentleman-Programming/gentle-ai/releases",
+		UpdateHint:    "See https://github.com/Gentleman-Programming/informa-wizard/releases",
 	}
 	profile := system.PlatformProfile{OS: "windows", PackageManager: "winget"}
 
@@ -364,7 +364,7 @@ func TestBrewUpgrade_UpdateFailureIsNonFatal(t *testing.T) {
 			}
 		}
 		// brew upgrade succeeds.
-		return exec.Command("echo", "Upgraded gentle-ai")
+		return exec.Command("echo", "Upgraded informa-wizard")
 	}
 
 	err := brewUpgrade(context.Background(), "informa-wizard")

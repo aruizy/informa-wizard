@@ -57,9 +57,9 @@ var (
 	// Package-level var for testability — tests can replace this to avoid real HTTP calls.
 	engramDownloadFn = engram.DownloadLatestBinary
 
-	// AppVersion is the gentle-ai version that will be written into backup manifests.
+	// AppVersion is the informa-wizard version that will be written into backup manifests.
 	// It is set by app.go before any CLI operation so that every backup created during
-	// an install or sync records which version of gentle-ai made it.
+	// an install or sync records which version of informa-wizard made it.
 	// Default "dev" matches the ldflags default in app.Version.
 	AppVersion = "dev"
 )
@@ -320,7 +320,7 @@ type prepareBackupStep struct {
 	source      backup.BackupSource
 	description string
 
-	// appVersion is the gentle-ai version that created this backup.
+	// appVersion is the informa-wizard version that created this backup.
 	// When set, it is written into the manifest as CreatedByVersion.
 	appVersion string
 }
@@ -561,7 +561,8 @@ func (s componentApplyStep) Run() error {
 			// GGA not found on any known PATH — install it.
 			commands, err := gga.InstallCommand(s.profile)
 			if err != nil {
-				return fmt.Errorf("resolve install command for component %q: %w", s.component, err)
+				fmt.Fprintf(os.Stderr, "WARNING: gga install skipped — could not resolve install command: %v\n", err)
+				return nil
 			}
 			installErr := runCommandSequence(commands)
 			if installErr != nil {
@@ -575,16 +576,18 @@ func (s componentApplyStep) Run() error {
 					// as success but warn the user.
 					fmt.Fprintf(os.Stderr, "WARNING: gga install command reported an error but gga is available — continuing. Error was: %v\n", installErr)
 				} else {
-					return installErr
+					fmt.Fprintf(os.Stderr, "WARNING: gga install failed — skipping gga component. Error was: %v\n", installErr)
+					return nil
 				}
 			}
 		}
 		if err := gga.EnsureRuntimeAssets(s.homeDir); err != nil {
-			return fmt.Errorf("ensure gga runtime assets: %w", err)
+			fmt.Fprintf(os.Stderr, "WARNING: gga runtime assets failed — skipping: %v\n", err)
+			return nil
 		}
 		if runtime.GOOS == "windows" {
 			if err := gga.EnsurePowerShellShim(s.homeDir); err != nil {
-				return fmt.Errorf("ensure gga powershell shim: %w", err)
+				fmt.Fprintf(os.Stderr, "WARNING: gga powershell shim failed — skipping: %v\n", err)
 			}
 			// Add GGA bin dir to the user PATH persistently on Windows.
 			// GGA's install.sh drops the binary into ~/bin which is not on PATH by default.
@@ -595,7 +598,8 @@ func (s componentApplyStep) Run() error {
 			}
 		}
 		if _, err := gga.Inject(s.homeDir, s.agents); err != nil {
-			return fmt.Errorf("inject gga config: %w", err)
+			fmt.Fprintf(os.Stderr, "WARNING: gga config injection failed — skipping: %v\n", err)
+			return nil
 		}
 		return nil
 	case model.ComponentTheme:

@@ -1410,10 +1410,10 @@ func TestRunInstallUpgradeIdempotency(t *testing.T) {
 			orchestratorCount, content)
 	}
 
-	// 3. No duplicate gentle-ai marker blocks — each section's open marker
+	// 3. No duplicate informa-wizard marker blocks — each section's open marker
 	// must appear exactly once.
 	for _, sectionID := range []string{"sdd-orchestrator", "engram-protocol"} {
-		openMarker := "<!-- gentle-ai:" + sectionID + " -->"
+		openMarker := "<!-- informa-wizard:" + sectionID + " -->"
 		count := strings.Count(content, openMarker)
 		if count != 1 {
 			t.Errorf("CLAUDE.md contains %d occurrences of marker %q, want exactly 1:\n%s",
@@ -1714,21 +1714,21 @@ func TestOpenCodePersonaBeforeSDDPreservesAllSections(t *testing.T) {
 	// the engram section. We verify persona + engram coexist.
 
 	// Engram protocol section must be present
-	if !strings.Contains(text, "<!-- gentle-ai:engram-protocol -->") {
+	if !strings.Contains(text, "<!-- informa-wizard:engram-protocol -->") {
 		t.Error("AGENTS.md missing engram-protocol open marker (issue #121 regression: persona may have overwritten engram section)")
 	}
-	if !strings.Contains(text, "<!-- /gentle-ai:engram-protocol -->") {
+	if !strings.Contains(text, "<!-- /informa-wizard:engram-protocol -->") {
 		t.Error("AGENTS.md missing engram-protocol close marker")
 	}
 
 	// Engram section must not be duplicated
-	marker := "<!-- gentle-ai:engram-protocol -->"
+	marker := "<!-- informa-wizard:engram-protocol -->"
 	if count := strings.Count(text, marker); count != 1 {
 		t.Errorf("AGENTS.md contains %d occurrences of %q, want exactly 1 (no duplicates)", count, marker)
 	}
 
 	// AGENTS.md must NOT have sdd-orchestrator markers — OpenCode uses opencode.json overlay
-	if strings.Contains(text, "<!-- gentle-ai:sdd-orchestrator -->") {
+	if strings.Contains(text, "<!-- informa-wizard:sdd-orchestrator -->") {
 		t.Error("AGENTS.md should NOT have sdd-orchestrator marker — OpenCode uses opencode.json agent overlay")
 	}
 

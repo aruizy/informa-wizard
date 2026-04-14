@@ -56,7 +56,7 @@ func TestRenderUpgrade_UpdatesAvailable(t *testing.T) {
 	out := RenderUpgrade(results, nil, nil, false, true /*updateCheckDone*/, 0, 0)
 
 	if !strings.Contains(out, "informa-wizard") {
-		t.Errorf("RenderUpgrade(updates available) should contain tool name 'gentle-ai'; got:\n%s", out)
+		t.Errorf("RenderUpgrade(updates available) should contain tool name 'informa-wizard'; got:\n%s", out)
 	}
 	if !strings.Contains(out, "v1.0.0") || !strings.Contains(out, "v2.0.0") {
 		t.Errorf("RenderUpgrade(updates available) should contain version info; got:\n%s", out)

@@ -124,9 +124,9 @@ func TestApplySoftOrderingBothMVPPairsWithFullSelection(t *testing.T) {
 	if personaIdx > sddIdx {
 		t.Fatalf("Persona (%d) must be before SDD (%d), got %v", personaIdx, sddIdx, result)
 	}
-	// Hard dep: Engram must still be before SDD
-	if engramIdx > sddIdx {
-		t.Fatalf("Engram (%d) must remain before SDD (%d) after soft reorder, got %v", engramIdx, sddIdx, result)
+	// Soft ordering: SDD must be before Engram (SDD writes base, Engram appends)
+	if sddIdx > engramIdx {
+		t.Fatalf("SDD (%d) must be before Engram (%d) after soft reorder, got %v", sddIdx, engramIdx, result)
 	}
 	// Skills must remain last
 	if result[len(result)-1] != model.ComponentSkills {

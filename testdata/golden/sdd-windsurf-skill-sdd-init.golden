@@ -100,7 +100,7 @@ Determine whether Strict TDD Mode should be enabled. The resolution follows a pr
    │   (e.g., CLAUDE.md, GEMINI.md, .cursorrules, etc.)
    ├── If found and says "enabled" → strict_tdd: true
    ├── If found and says "disabled" → strict_tdd: false
-   └── This is the preference set by the user in the gentle-ai TUI
+   └── This is the preference set by the user in the informa-wizard TUI
 
 2. If no marker found, check openspec config:
    ├── Read openspec/config.yaml → strict_tdd field
@@ -108,14 +108,14 @@ Determine whether Strict TDD Mode should be enabled. The resolution follows a pr
 
 3. If nothing found AND test runner was detected in Step 2:
    ├── Default: strict_tdd: true (enable if the project CAN do TDD)
-   └── This ensures TDD is active even without gentle-ai TUI setup
+   └── This ensures TDD is active even without informa-wizard TUI setup
 
 4. If no test runner detected:
    ├── strict_tdd: false (cannot enable without test runner)
    └── Include NOTE in summary: "Strict TDD Mode unavailable — no test runner detected"
 ```
 
-**Do NOT ask the user interactively.** The preference is resolved from existing config. If the user wants to change it, they run `gentle-ai sync` with the TUI or set `strict_tdd` in `openspec/config.yaml`.
+**Do NOT ask the user interactively.** The preference is resolved from existing config. If the user wants to change it, they run `informa-wizard sync` with the TUI or set `strict_tdd` in `openspec/config.yaml`.
 
 ### Step 4: Initialize Persistence Backend
 

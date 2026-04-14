@@ -35,7 +35,7 @@ var reExec = func(argv0 string, argv []string, envv []string) error {
 // goOS returns the current operating system name. Package-level var for testing.
 var goOS = func() string { return runtime.GOOS }
 
-// selfUpdate checks for and applies a gentle-ai update before normal dispatch.
+// selfUpdate checks for and applies a informa-wizard update before normal dispatch.
 // Returns nil on success or skip; errors are non-fatal (caller logs and continues).
 //
 // Guard evaluation order (per spec):
@@ -63,10 +63,10 @@ func selfUpdate(ctx context.Context, version string, profile system.PlatformProf
 	ctx, cancel := context.WithTimeout(ctx, selfUpdateTimeout)
 	defer cancel()
 
-	// Check for updates (only gentle-ai).
+	// Check for updates (only informa-wizard).
 	results := updateCheckFiltered(ctx, version, profile, []string{"informa-wizard"})
 
-	// Find the gentle-ai result.
+	// Find the informa-wizard result.
 	var target *update.UpdateResult
 	for i := range results {
 		if results[i].Tool.Name == "informa-wizard" {
@@ -113,9 +113,9 @@ func selfUpdate(ctx context.Context, version string, profile system.PlatformProf
 	//
 	// Use exec.LookPath("informa-wizard") rather than os.Executable() because
 	// on Homebrew, os.Executable() resolves to the versioned Cellar path
-	// (e.g. /opt/homebrew/Cellar/gentle-ai/1.8.5/bin/gentle-ai) which
+	// (e.g. /opt/homebrew/Cellar/informa-wizard/1.8.5/bin/informa-wizard) which
 	// still points to the OLD binary after upgrade. The PATH symlink
-	// (/opt/homebrew/bin/gentle-ai) is updated by Homebrew to the new
+	// (/opt/homebrew/bin/informa-wizard) is updated by Homebrew to the new
 	// version, so LookPath gives us the correct binary.
 	executable, err := lookPathFn("informa-wizard")
 	if err != nil {

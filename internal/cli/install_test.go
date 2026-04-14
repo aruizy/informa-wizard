@@ -47,12 +47,13 @@ func TestNormalizeInstallFlagsDefaults(t *testing.T) {
 		Persona: model.PersonaCustom,
 		Preset:  model.PresetFull,
 		Components: []model.ComponentID{
-			model.ComponentEngram,
 			model.ComponentSDD,
 			model.ComponentSkills,
 			model.ComponentContext7,
+			model.ComponentPersona,
 			model.ComponentPermission,
 			model.ComponentGGA,
+			model.ComponentMonday,
 		},
 	}
 

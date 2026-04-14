@@ -155,7 +155,7 @@ proposal -> specs --> tasks -> apply -> verify -> archive
 ### Result Contract
 Each phase returns: `status`, `executive_summary`, `artifacts`, `next_recommended`, `risks`, `skill_resolution`.
 
-<!-- gentle-ai:sdd-model-assignments -->
+<!-- informa-wizard:sdd-model-assignments -->
 ## Model Assignments
 
 Read this table at session start. Antigravity supports multiple models via Mission Control — if your current model matches a phase's recommended alias, proceed normally. If model switching is not available mid-session, use this table as a reasoning-depth guide: phases assigned to `opus` require deeper architectural thinking, while `haiku` phases are mechanical.
@@ -173,7 +173,7 @@ Read this table at session start. Antigravity supports multiple models via Missi
 | sdd-archive | haiku | Copy and close |
 | default | sonnet | Non-SDD general delegation |
 
-<!-- /gentle-ai:sdd-model-assignments -->
+<!-- /informa-wizard:sdd-model-assignments -->
 
 ### Skill Resolver Protocol
 
@@ -243,7 +243,7 @@ This prevents progress loss across batches. Read-merge-write is mandatory for co
 When the Monday component is installed (`monday_board_id` is available from project config or user input), the orchestrator MUST pass Monday context to `sdd-tasks`, `sdd-apply`, and `sdd-verify` phases.
 
 At session start (or first SDD command), resolve the Monday board ID:
-1. Check `.gentle-ai/monday.json` in the workspace root for `{"board_id": "..."}`, OR
+1. Check `.informa-wizard/monday.json` in the workspace root for `{"board_id": "..."}`, OR
 2. Ask the user: "¿Tienes un board ID de Monday para esta sesión?"
 3. If neither available, skip Monday integration entirely.
 

@@ -6,7 +6,7 @@
       "Bash(grep:*)",
       "Bash(go build:*)",
       "Bash(cd:*)",
-      "Bash(find . -name '*_test.go' -exec grep -l 'gentle-ai' {})",
+      "Bash(find . -name '*_test.go' -exec grep -l 'informa-wizard' {})",
       "Bash(while read:*)",
       "Bash(do sed:*)",
       "Bash(done)",
@@ -16,7 +16,12 @@
       "Read(//tmp/**)",
       "Read(//c/tmp/**)",
       "Read(//c/Users/aruiz/AppData/Local/Temp/dev-orchestrators/sdd-orchestrator/**)",
-      "Read(//c/GIT/informa-wizard/$TEMP/dev-orchestrators/sdd-orchestrator/**)"
+      "Read(//c/GIT/informa-wizard/$TEMP/dev-orchestrators/sdd-orchestrator/**)",
+      "Bash(find C:/Users/aruiz/.claude -name *.md -newer C:/GIT/informa-wizard/go.mod -type f)",
+      "Bash(find C:/Users/aruiz/.claude -name *.md -path */skills/sdd* -type f)",
+      "Bash(go run:*)",
+      "Bash(xargs sed:*)",
+      "Bash(find:*)"
     ]
   }
 }

@@ -16,7 +16,7 @@ var Tools = []ToolInfo{
 		Repo:          "informa-wizard",
 		DetectCmd:     nil, // version comes from build-time ldflags (app.Version)
 		VersionPrefix: "v",
-		// gentle-ai: brew on macOS, binary release download on Linux/Windows.
+		// informa-wizard: brew on macOS, binary release download on Linux/Windows.
 		// Self-upgrade of the running binary on Windows is deferred to Phase 2.
 		InstallMethod: InstallBinary,
 	},

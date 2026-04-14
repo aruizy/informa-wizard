@@ -1922,6 +1922,26 @@ func (m Model) goBack() Model {
 		return m
 	}
 
+	// Going back from Review: if Monday screen was shown, go there first.
+	if m.Screen == ScreenReview && m.shouldShowMondayScreen() {
+		m.setScreen(ScreenMonday)
+		return m
+	}
+
+	// Going back from Monday: return to DependencyTree (or SkillPicker in custom).
+	if m.Screen == ScreenMonday {
+		if m.Selection.Preset == model.PresetCustom {
+			if m.shouldShowSkillPickerScreen() {
+				m.setScreen(ScreenSkillPicker)
+			} else {
+				m.setScreen(ScreenDependencyTree)
+			}
+		} else {
+			m.setScreen(ScreenDependencyTree)
+		}
+		return m
+	}
+
 	// In custom preset, going back from Review walks through intermediate screens.
 	// Order (reverse of forward): SkillPicker → StrictTDD → SDDMode/ModelPicker → ClaudeModelPicker → DependencyTree.
 	if m.Screen == ScreenReview && m.Selection.Preset == model.PresetCustom {
@@ -2415,7 +2435,8 @@ func (m *Model) goToReviewOrMonday() {
 		m.setScreen(ScreenMonday)
 		return
 	}
-	m.goToReviewOrMonday()
+	m.Review = planner.BuildReviewPayload(m.Selection, m.DependencyPlan)
+	m.setScreen(ScreenReview)
 }
 
 func mondayCursorPos(m Model) int {
@@ -2433,20 +2454,20 @@ func (m Model) shouldShowClaudeModelPickerScreen() bool {
 func componentsForPreset(preset model.PresetID) []model.ComponentID {
 	switch preset {
 	case model.PresetMinimal:
-		return []model.ComponentID{model.ComponentEngram}
+		return []model.ComponentID{model.ComponentSDD}
 	case model.PresetEcosystemOnly:
-		return []model.ComponentID{model.ComponentEngram, model.ComponentSDD, model.ComponentSkills, model.ComponentContext7, model.ComponentGGA}
+		return []model.ComponentID{model.ComponentSDD, model.ComponentSkills, model.ComponentContext7, model.ComponentGGA, model.ComponentMonday}
 	case model.PresetCustom:
 		return nil
 	default:
 		return []model.ComponentID{
-			model.ComponentEngram,
 			model.ComponentSDD,
 			model.ComponentSkills,
 			model.ComponentContext7,
 			model.ComponentPersona,
 			model.ComponentPermission,
 			model.ComponentGGA,
+			model.ComponentMonday,
 		}
 	}
 }

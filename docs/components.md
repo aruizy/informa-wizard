@@ -19,7 +19,7 @@
 
 ## GGA Behavior
 
-`gentle-ai --component gga` installs/provisions the `gga` binary globally on your machine.
+`informa-wizard --component gga` installs/provisions the `gga` binary globally on your machine.
 
 It does **not** run project-level hook setup automatically (`gga init` / `gga install`) because that should be an explicit decision per repository.
 
@@ -34,7 +34,7 @@ gga install
 
 ## Skills
 
-### Included Skills (installed by gentle-ai)
+### Included Skills (installed by informa-wizard)
 
 14 skill files organized by category, embedded in the binary and injected into your agent's configuration:
 

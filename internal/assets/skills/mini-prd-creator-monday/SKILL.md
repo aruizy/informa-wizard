@@ -112,7 +112,7 @@ Generate a compact mini-PRD document in Spanish with this structure:
 
 The board ID is resolved in this order:
 1. User provides it explicitly in the conversation
-2. Read from project config (`.gentle-ai/monday.json` if exists)
+2. Read from project config (`.informa-wizard/monday.json` if exists)
 3. Ask the user: "¿En qué tablero de Monday quieres crear la tarea? Dame el board ID."
 
 ---

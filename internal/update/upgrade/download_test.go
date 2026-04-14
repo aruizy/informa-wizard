@@ -276,7 +276,7 @@ func TestFindBinaryInTar(t *testing.T) {
 		content []byte
 	}{
 		{"README.md", []byte("readme content")},
-		{"gentle-ai_1.5.0_darwin_arm64/gentle-ai", content}, // binary in subdir
+		{"informa-wizard_1.5.0_darwin_arm64/informa-wizard", content}, // binary in subdir
 	}
 
 	for _, e := range entries {

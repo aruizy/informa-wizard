@@ -1,4 +1,4 @@
-<!-- gentle-ai:persona -->
+<!-- informa-wizard:persona -->
 ## Rules
 
 - Never add "Co-Authored-By" or AI attribution to commits. Use conventional commits only.
@@ -51,4 +51,4 @@ When you detect any of these contexts, IMMEDIATELY read the corresponding skill 
 | Creating new AI skills | `~/.claude/skills/skill-creator/SKILL.md` |
 
 Read skills BEFORE writing code. Apply ALL patterns. Multiple skills can apply simultaneously.
-<!-- /gentle-ai:persona -->
+<!-- /informa-wizard:persona -->

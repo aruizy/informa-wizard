@@ -187,7 +187,7 @@ func TestRenderUpgradeReport_PerToolSemantics_Deterministic(t *testing.T) {
 					OldVersion: "1.0.0",
 					NewVersion: "1.5.0",
 					Status:     upgrade.UpgradeSkipped,
-					ManualHint: "Download from https://github.com/Gentleman-Programming/gentle-ai/releases",
+					ManualHint: "Download from https://github.com/Gentleman-Programming/informa-wizard/releases",
 				},
 			},
 			wantContains:   []string{"informa-wizard", "manual update required", "github.com", "[--]"},

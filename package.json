@@ -11,14 +11,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Gentleman-Programming/gentle-ai.git"
+    "url": "git+https://github.com/Gentleman-Programming/informa-wizard.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/Gentleman-Programming/gentle-ai/issues"
+    "url": "https://github.com/Gentleman-Programming/informa-wizard/issues"
   },
-  "homepage": "https://github.com/Gentleman-Programming/gentle-ai#readme"
+  "homepage": "https://github.com/Gentleman-Programming/informa-wizard#readme"
 }

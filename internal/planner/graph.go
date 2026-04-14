@@ -36,7 +36,7 @@ func (g Graph) DependenciesOf(component model.ComponentID) []model.ComponentID {
 func MVPGraph() Graph {
 	return NewGraph(map[model.ComponentID][]model.ComponentID{
 		model.ComponentEngram:     nil,
-		model.ComponentSDD:        {model.ComponentEngram},
+		model.ComponentSDD:        nil,
 		model.ComponentSkills:     {model.ComponentSDD},
 		model.ComponentContext7:   nil,
 		model.ComponentPersona:    nil,
@@ -58,8 +58,9 @@ func MVPGraph() Graph {
 // INVARIANT: the `first` element in every pair must have nil deps in MVPGraph.
 // See applySoftOrdering() safety contract in order.go.
 var softOrderingPairs = [][2]model.ComponentID{
-	{model.ComponentPersona, model.ComponentEngram},
 	{model.ComponentPersona, model.ComponentSDD},
+	{model.ComponentPersona, model.ComponentEngram},
+	{model.ComponentSDD, model.ComponentEngram},
 }
 
 // SoftOrderingConstraints returns the static soft-ordering pairs.

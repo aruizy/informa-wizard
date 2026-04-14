@@ -19,7 +19,7 @@
 Just run it — the Bubbletea TUI guides you through agent selection, components, skills, and presets:
 
 ```bash
-gentle-ai
+informa-wizard
 ```
 
 ---
@@ -32,67 +32,67 @@ First-time setup — detects your tools, configures agents, injects all componen
 
 ```bash
 # Full ecosystem for multiple agents
-gentle-ai install \
+informa-wizard install \
   --agent claude-code,opencode,gemini-cli \
   --preset full-gentleman
 
 # Minimal setup for Cursor
-gentle-ai install \
+informa-wizard install \
   --agent cursor \
   --preset minimal
 
 # Pick specific components and skills
-gentle-ai install \
+informa-wizard install \
   --agent claude-code \
   --component engram,sdd,skills,context7,persona,permissions \
   --skill go-testing,skill-creator,branch-pr,issue-creation \
   --persona gentleman
 
 # Dry-run first (preview plan without applying changes)
-gentle-ai install --dry-run \
+informa-wizard install --dry-run \
   --agent claude-code,opencode \
   --preset full-gentleman
 ```
 
 ### sync
 
-Refresh managed assets to the current version. Use after `brew upgrade gentle-ai` or when you want your local configs aligned with the latest release. Does NOT reinstall binaries (engram, GGA) — only updates prompt content, skills, MCP configs, and SDD orchestrators.
+Refresh managed assets to the current version. Use after `brew upgrade informa-wizard` or when you want your local configs aligned with the latest release. Does NOT reinstall binaries (engram, GGA) — only updates prompt content, skills, MCP configs, and SDD orchestrators.
 
 ```bash
 # Sync all installed agents
-gentle-ai sync
+informa-wizard sync
 
 # Sync specific agents only
-gentle-ai sync --agent cursor --agent windsurf
+informa-wizard sync --agent cursor --agent windsurf
 
 # Sync a specific component
-gentle-ai sync --component sdd
-gentle-ai sync --component skills
-gentle-ai sync --component engram
+informa-wizard sync --component sdd
+informa-wizard sync --component skills
+informa-wizard sync --component engram
 ```
 
 Sync is safe and idempotent — running it twice produces no changes the second time.
 
 ### update / upgrade
 
-Check for and install new versions of `gentle-ai` itself:
+Check for and install new versions of `informa-wizard` itself:
 
 ```bash
 # Check if a newer version is available
-gentle-ai update
+informa-wizard update
 
 # Upgrade to the latest release (downloads new binary, replaces current)
-gentle-ai upgrade
+informa-wizard upgrade
 ```
 
-After upgrading, run `gentle-ai sync` to refresh all managed assets to the new version's content.
+After upgrading, run `informa-wizard sync` to refresh all managed assets to the new version's content.
 
 ### version
 
 ```bash
-gentle-ai version
-gentle-ai --version
-gentle-ai -v
+informa-wizard version
+informa-wizard --version
+informa-wizard -v
 ```
 
 ---
@@ -123,22 +123,22 @@ gentle-ai -v
 
 ```bash
 # First time: install everything
-brew install gentleman-programming/tap/gentle-ai
-gentle-ai install --agent claude-code,cursor --preset full-gentleman
+brew install gentleman-programming/tap/informa-wizard
+informa-wizard install --agent claude-code,cursor --preset full-gentleman
 
 # After a new release: upgrade + sync
-brew upgrade gentle-ai
-gentle-ai sync
+brew upgrade informa-wizard
+informa-wizard sync
 
 # Adding a new agent later
-gentle-ai install --agent windsurf --preset full-gentleman
+informa-wizard install --agent windsurf --preset full-gentleman
 ```
 
 ---
 
 ## Dependency Management
 
-`gentle-ai` auto-detects prerequisites before installation and provides platform-specific guidance:
+`informa-wizard` auto-detects prerequisites before installation and provides platform-specific guidance:
 
 - **Detected tools**: git, curl, node, npm, brew, go
 - **Version checks**: validates minimum versions where applicable
