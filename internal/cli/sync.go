@@ -267,7 +267,7 @@ func BuildSyncSelection(flags SyncFlags, agentIDs []model.AgentID, homeDir strin
 
 	return model.Selection{
 		Agents:     agentIDs,
-		Components: components,
+		Components: unique(components),
 		SDDMode:    sddMode,
 		StrictTDD:  flags.StrictTDD,
 		Skills:     skillIDs,
@@ -322,9 +322,15 @@ func DiscoverAgents(homeDir string) []model.AgentID {
 
 // DiscoverComponents returns the component IDs to sync.
 // Reads from state.json when available; falls back to the default preset.
+//
+// Three cases:
+//   - state.json exists with InstalledComponents set (even empty) → respect it
+//   - state.json exists but InstalledComponents is nil (pre-component state) → fallback
+//   - state.json missing → fallback
 func DiscoverComponents(homeDir string) []model.ComponentID {
 	s, err := state.Read(homeDir)
-	if err == nil && len(s.InstalledComponents) > 0 {
+	if err == nil && s.InstalledComponents != nil {
+		// State file has explicit component list (possibly empty) — respect it.
 		ids := make([]model.ComponentID, 0, len(s.InstalledComponents))
 		for _, c := range s.InstalledComponents {
 			ids = append(ids, model.ComponentID(c))
@@ -333,7 +339,7 @@ func DiscoverComponents(homeDir string) []model.ComponentID {
 	}
 
 	// Fallback: default sync-safe components (backward compat for users who
-	// installed before component persistence was added).
+	// installed before component persistence was added, or no state file).
 	return []model.ComponentID{
 		model.ComponentSDD,
 		model.ComponentContext7,

@@ -34,7 +34,7 @@ func RenderMonday(token, boardID string, activeField MondayField, cursorPos int)
 	b.WriteString("\n")
 	b.WriteString(styles.SubtextStyle.Render("  Get yours at: https://informadb.monday.com/apps/manage/tokens"))
 	b.WriteString("\n")
-	b.WriteString(renderTextInput(token, activeField == MondayFieldToken, cursorPos))
+	b.WriteString(renderTextInput(token, activeField == MondayFieldToken, cursorPos, true))
 	b.WriteString("\n\n")
 
 	// Board ID field
@@ -48,7 +48,7 @@ func RenderMonday(token, boardID string, activeField MondayField, cursorPos int)
 	b.WriteString("\n")
 	b.WriteString(styles.SubtextStyle.Render("  From board URL: https://informadb.monday.com/boards/{BOARD_ID}/views/..."))
 	b.WriteString("\n")
-	b.WriteString(renderTextInput(boardID, activeField == MondayFieldBoardID, cursorPos))
+	b.WriteString(renderTextInput(boardID, activeField == MondayFieldBoardID, cursorPos, false))
 	b.WriteString("\n\n")
 
 	if token == "" {
@@ -62,13 +62,15 @@ func RenderMonday(token, boardID string, activeField MondayField, cursorPos int)
 }
 
 // renderTextInput renders a single-line text input with cursor.
-func renderTextInput(value string, focused bool, cursorPos int) string {
+// When masked is true and the field is unfocused, the value is replaced with asterisks.
+func renderTextInput(value string, focused bool, cursorPos int, masked bool) string {
 	if !focused {
 		display := value
 		if display == "" {
 			display = "(empty)"
+		} else if masked {
+			display = strings.Repeat("*", len([]rune(display)))
 		}
-		// Mask token values when not focused
 		return styles.UnselectedStyle.Render("  " + display)
 	}
 

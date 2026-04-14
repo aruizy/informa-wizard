@@ -106,6 +106,48 @@ func TestWriteOverwrite(t *testing.T) {
 	}
 }
 
+// TestWriteAndReadWithComponents verifies that components round-trip correctly.
+func TestWriteAndReadWithComponents(t *testing.T) {
+	home := t.TempDir()
+	agents := []string{"claude-code"}
+	components := []string{"sdd", "engram", "skills"}
+
+	if err := Write(home, agents, components); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+
+	s, err := Read(home)
+	if err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+
+	if !reflect.DeepEqual(s.InstalledComponents, components) {
+		t.Errorf("InstalledComponents = %v, want %v", s.InstalledComponents, components)
+	}
+}
+
+// TestWriteEmptyComponentsRoundTrips verifies that an empty component list
+// serializes as [] (not omitted) and reads back as an empty slice.
+func TestWriteEmptyComponentsRoundTrips(t *testing.T) {
+	home := t.TempDir()
+
+	if err := Write(home, []string{"claude-code"}, []string{}); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+
+	s, err := Read(home)
+	if err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+
+	if s.InstalledComponents == nil {
+		t.Errorf("InstalledComponents = nil, want empty slice (not nil)")
+	}
+	if len(s.InstalledComponents) != 0 {
+		t.Errorf("InstalledComponents = %v, want empty", s.InstalledComponents)
+	}
+}
+
 // TestWriteEmptyAgents verifies that an empty agent list round-trips correctly.
 func TestWriteEmptyAgents(t *testing.T) {
 	home := t.TempDir()

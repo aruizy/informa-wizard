@@ -12,7 +12,7 @@ const stateFile = "state.json"
 // InstallState holds the persisted user selections from the last install run.
 type InstallState struct {
 	InstalledAgents     []string `json:"installed_agents"`
-	InstalledComponents []string `json:"installed_components,omitempty"`
+	InstalledComponents []string `json:"installed_components"`
 }
 
 // Path returns the absolute path to the state file for the given home directory.

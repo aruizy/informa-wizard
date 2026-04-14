@@ -623,7 +623,9 @@ func inlineOpenCodeSDDPrompts(overlayBytes []byte, homeDir string) ([]byte, erro
 	if !ok {
 		return overlayBytes, nil
 	}
-	orchestratorMap["prompt"] = assets.MustRead("generic/sdd-orchestrator.md")
+	orchestratorPrompt := assets.MustRead("generic/sdd-orchestrator.md")
+	orchestratorPrompt = filemerge.InjectMarkdownSection(orchestratorPrompt, "artifact-store-policy", defaultArtifactStorePolicy())
+	orchestratorMap["prompt"] = orchestratorPrompt
 
 	// Replace sub-agent prompt placeholders with {file:<absolutePath>} references.
 	// The placeholder format is __PROMPT_FILE_{phase}__ where {phase} is the agent name.
@@ -1013,8 +1015,8 @@ func stripBareOrchestratorForFilePrompt(content string) string {
 }
 
 const instructionsFrontmatter = "---\n" +
-	"name: Gentle AI Persona\n" +
-	"description: Gentleman persona with SDD orchestration and Engram protocol\n" +
+	"name: Informa Wizard\n" +
+	"description: SDD orchestration with artifact store and skill management\n" +
 	"applyTo: \"**\"\n" +
 	"---\n"
 

@@ -1509,6 +1509,82 @@ func TestDiscoverAgentsStateMultipleAgents(t *testing.T) {
 	}
 }
 
+// ─── DiscoverComponents ──────────────────────────────────────────────────────
+
+func TestDiscoverComponentsReturnsPersistedComponents(t *testing.T) {
+	home := t.TempDir()
+	if err := state.Write(home, []string{"claude-code"}, []string{"sdd", "engram", "skills"}); err != nil {
+		t.Fatalf("state.Write() error = %v", err)
+	}
+
+	got := DiscoverComponents(home)
+	want := []model.ComponentID{model.ComponentSDD, model.ComponentEngram, model.ComponentSkills}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("DiscoverComponents() = %v, want %v", got, want)
+	}
+}
+
+func TestDiscoverComponentsRespectsEmptyState(t *testing.T) {
+	home := t.TempDir()
+	// User explicitly installed zero components.
+	if err := state.Write(home, []string{"claude-code"}, []string{}); err != nil {
+		t.Fatalf("state.Write() error = %v", err)
+	}
+
+	got := DiscoverComponents(home)
+	if len(got) != 0 {
+		t.Errorf("DiscoverComponents() = %v, want empty (user chose zero components)", got)
+	}
+}
+
+func TestDiscoverComponentsFallsBackWhenNoState(t *testing.T) {
+	home := t.TempDir()
+	// No state.json — should fall back to defaults.
+
+	got := DiscoverComponents(home)
+	want := []model.ComponentID{model.ComponentSDD, model.ComponentContext7, model.ComponentSkills}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("DiscoverComponents() fallback = %v, want %v", got, want)
+	}
+}
+
+func TestDiscoverComponentsFallsBackWhenStatePreDatesComponentField(t *testing.T) {
+	home := t.TempDir()
+	// Simulate a state file written before component persistence was added:
+	// has installed_agents but no installed_components key.
+	if err := state.Write(home, []string{"claude-code"}, nil); err != nil {
+		t.Fatalf("state.Write() error = %v", err)
+	}
+
+	got := DiscoverComponents(home)
+	want := []model.ComponentID{model.ComponentSDD, model.ComponentContext7, model.ComponentSkills}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("DiscoverComponents() pre-component state = %v, want fallback %v", got, want)
+	}
+}
+
+func TestBuildSyncSelectionDeduplicatesComponents(t *testing.T) {
+	home := t.TempDir()
+	// State has permissions already installed.
+	if err := state.Write(home, []string{"claude-code"}, []string{"sdd", "permissions"}); err != nil {
+		t.Fatalf("state.Write() error = %v", err)
+	}
+
+	// Flag also requests permissions — should not appear twice.
+	flags := SyncFlags{IncludePermissions: true}
+	sel := BuildSyncSelection(flags, []model.AgentID{model.AgentClaudeCode}, home)
+
+	count := 0
+	for _, c := range sel.Components {
+		if c == model.ComponentPermission {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("ComponentPermission appears %d times, want 1 (dedup failed); components = %v", count, sel.Components)
+	}
+}
+
 func TestRunSyncRollsBackOnFailure(t *testing.T) {
 	home := t.TempDir()
 

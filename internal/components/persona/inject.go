@@ -309,8 +309,8 @@ func readFileOrEmpty(path string) (string, error) {
 
 func wrapInstructionsFile(content string) string {
 	frontmatter := "---\n" +
-		"name: Gentle AI Persona\n" +
-		"description: Teaching-oriented persona with SDD orchestration and Engram protocol\n" +
+		"name: Informa Wizard\n" +
+		"description: SDD orchestration with artifact store and skill management\n" +
 		"applyTo: \"**\"\n" +
 		"---\n\n"
 
