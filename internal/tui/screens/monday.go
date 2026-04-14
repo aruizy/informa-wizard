@@ -32,6 +32,8 @@ func RenderMonday(token, boardID string, activeField MondayField, cursorPos int)
 	}
 	b.WriteString(styles.HeadingStyle.Render(tokenLabel))
 	b.WriteString("\n")
+	b.WriteString(styles.SubtextStyle.Render("  Get yours at: https://informadb.monday.com/apps/manage/tokens"))
+	b.WriteString("\n")
 	b.WriteString(renderTextInput(token, activeField == MondayFieldToken, cursorPos))
 	b.WriteString("\n\n")
 
@@ -43,6 +45,8 @@ func RenderMonday(token, boardID string, activeField MondayField, cursorPos int)
 		boardLabel = "  Board ID:"
 	}
 	b.WriteString(styles.HeadingStyle.Render(boardLabel))
+	b.WriteString("\n")
+	b.WriteString(styles.SubtextStyle.Render("  From board URL: https://informadb.monday.com/boards/{BOARD_ID}/views/..."))
 	b.WriteString("\n")
 	b.WriteString(renderTextInput(boardID, activeField == MondayFieldBoardID, cursorPos))
 	b.WriteString("\n\n")
