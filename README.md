@@ -39,10 +39,10 @@ This is an **ecosystem configurator** -- it takes whatever AI coding agent(s) yo
 
 ## Quick Start
 
-### Go install (any platform with Go 1.24+)
-
 ```bash
-go install gitlab.informa.tools/ai/wizard/informa-wizard/cmd/informa-wizard@latest
+git clone https://gitlab.informa.tools/ai/wizard/informa-wizard.git
+cd informa-wizard
+go install ./cmd/informa-wizard
 ```
 
 ### After install: project-level setup
@@ -60,13 +60,7 @@ These are **not required** for basic usage. The SDD orchestrator runs `/sdd-init
 
 ## Install
 
-### Go install (any platform with Go 1.24+)
-
-```bash
-go install gitlab.informa.tools/ai/wizard/informa-wizard/cmd/informa-wizard@latest
-```
-
-### From source
+Requires Go 1.24+.
 
 ```bash
 git clone https://gitlab.informa.tools/ai/wizard/informa-wizard.git
