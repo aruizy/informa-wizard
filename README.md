@@ -52,7 +52,7 @@ Once your agents are configured, open your AI agent in a project and run these t
 | Command | What it does | When to re-run |
 |---------|-------------|----------------|
 | `/sdd-init` | Detects stack, testing capabilities, activates Strict TDD Mode if available | When your project adds/removes test frameworks, or first time in a new project |
-| `skill-registry` | Scans installed skills and project conventions, builds the registry | After installing/removing skills, or first time in a new project |
+| `/skill-registry` | Scans installed skills and project conventions, builds the registry | After installing/removing skills, or first time in a new project |
 
 These are **not required** for basic usage. The SDD orchestrator runs `/sdd-init` automatically if it detects no context. But if something changed in your project (new test runner, new dependencies), re-running them manually ensures the agents have up-to-date context.
 
