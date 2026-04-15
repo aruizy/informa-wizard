@@ -68,18 +68,6 @@ These are **not required** for basic usage. The SDD orchestrator runs `/sdd-init
 
 ---
 
-## Engram (Optional)
-
-[Engram](https://github.com/gentleman-programming/engram) provides persistent memory across sessions. It is **not required** — the default artifact store is `openspec` (file-based, committable). Enable engram when you want cross-session memory recovery:
-
-```bash
-informa-wizard install --components engram
-```
-
-Or add it later to an existing installation through the TUI (select "Custom" preset and toggle the Engram component).
-
----
-
 ## Monday.com Integration
 
 Informa Wizard includes built-in Monday.com integration. During install, provide your credentials:
