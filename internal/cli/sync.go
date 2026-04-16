@@ -12,6 +12,7 @@ import (
 
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/backup"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/devskills"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/engram"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/gga"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/mcp"
@@ -576,6 +577,24 @@ func (s componentSyncStep) Run() error {
 			res, err := theme.Inject(s.homeDir, adapter)
 			if err != nil {
 				return fmt.Errorf("sync theme for %q: %w", adapter.Agent(), err)
+			}
+			s.countChanged(boolToInt(res.Changed))
+		}
+		return nil
+
+	case model.ComponentDevSkills:
+		cfg, _ := devskills.ReadConfig(s.homeDir)
+		if cfg.RepoURL == "" || len(cfg.InstalledSkills) == 0 {
+			return nil
+		}
+		targetDir := filepath.Join(s.homeDir, ".informa-wizard", "dev-skills")
+		if err := devskills.Pull(targetDir); err != nil {
+			return fmt.Errorf("pull dev-skills repo: %w", err)
+		}
+		for _, adapter := range adapters {
+			res, err := devskills.InjectSkills(s.homeDir, adapter, cfg.InstalledSkills)
+			if err != nil {
+				return fmt.Errorf("inject dev-skills for %q: %w", adapter.Agent(), err)
 			}
 			s.countChanged(boolToInt(res.Changed))
 		}

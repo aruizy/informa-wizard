@@ -18,6 +18,7 @@ type Selection struct {
 	ClaudeModelAssignments map[string]ClaudeModelAlias // key = phase name; value = opus|sonnet|haiku
 	Profiles               []Profile                   // named SDD profiles to generate/update during sync
 	Monday                 MondayConfig                // Monday.com integration config
+	DevSkillSelections     []string                    // individual skill IDs selected for dev-skills component
 }
 
 func (s Selection) HasAgent(agent AgentID) bool {

@@ -13,6 +13,7 @@ import (
 
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/backup"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/devskills"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/engram"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/gga"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/mcp"
@@ -113,7 +114,7 @@ func RunInstall(args []string, detection system.DetectionResult) (InstallResult,
 		return result, fmt.Errorf("resolve user home directory: %w", err)
 	}
 
-	runtime, err := newInstallRuntime(homeDir, input.Selection, resolved, profile)
+	runtime, err := newInstallRuntime(homeDir, input.Selection, resolved, profile, flags.DevSkillsRepo)
 	if err != nil {
 		return result, err
 	}
@@ -236,20 +237,21 @@ func buildStagePlan(selection model.Selection, resolved planner.ResolvedPlan) pi
 }
 
 type installRuntime struct {
-	homeDir      string
-	workspaceDir string
-	selection    model.Selection
-	resolved     planner.ResolvedPlan
-	profile      system.PlatformProfile
-	backupRoot   string
-	state        *runtimeState
+	homeDir       string
+	workspaceDir  string
+	selection     model.Selection
+	resolved      planner.ResolvedPlan
+	profile       system.PlatformProfile
+	backupRoot    string
+	state         *runtimeState
+	devSkillsRepo string
 }
 
 type runtimeState struct {
 	manifest backup.Manifest
 }
 
-func newInstallRuntime(homeDir string, selection model.Selection, resolved planner.ResolvedPlan, profile system.PlatformProfile) (*installRuntime, error) {
+func newInstallRuntime(homeDir string, selection model.Selection, resolved planner.ResolvedPlan, profile system.PlatformProfile, devSkillsRepo string) (*installRuntime, error) {
 	backupRoot := filepath.Join(homeDir, ".informa-wizard", "backups")
 	if err := os.MkdirAll(backupRoot, 0o755); err != nil {
 		return nil, fmt.Errorf("create backup root directory %q: %w", backupRoot, err)
@@ -258,13 +260,14 @@ func newInstallRuntime(homeDir string, selection model.Selection, resolved plann
 	workspaceDir, _ := os.Getwd()
 
 	return &installRuntime{
-		homeDir:      homeDir,
-		workspaceDir: workspaceDir,
-		selection:    selection,
-		resolved:     resolved,
-		profile:      profile,
-		backupRoot:   backupRoot,
-		state:        &runtimeState{},
+		homeDir:       homeDir,
+		workspaceDir:  workspaceDir,
+		selection:     selection,
+		resolved:      resolved,
+		profile:       profile,
+		backupRoot:    backupRoot,
+		state:         &runtimeState{},
+		devSkillsRepo: devSkillsRepo,
 	}, nil
 }
 
@@ -294,13 +297,14 @@ func (r *installRuntime) stagePlan() pipeline.StagePlan {
 
 	for _, component := range r.resolved.OrderedComponents {
 		apply = append(apply, componentApplyStep{
-			id:           "component:" + string(component),
-			component:    component,
-			homeDir:      r.homeDir,
-			workspaceDir: r.workspaceDir,
-			agents:       r.resolved.Agents,
-			selection:    r.selection,
-			profile:      r.profile,
+			id:            "component:" + string(component),
+			component:     component,
+			homeDir:       r.homeDir,
+			workspaceDir:  r.workspaceDir,
+			agents:        r.resolved.Agents,
+			selection:     r.selection,
+			profile:       r.profile,
+			devSkillsRepo: r.devSkillsRepo,
 		})
 	}
 
@@ -440,13 +444,14 @@ func (s agentInstallStep) Run() error {
 }
 
 type componentApplyStep struct {
-	id           string
-	component    model.ComponentID
-	homeDir      string
-	workspaceDir string
-	agents       []model.AgentID
-	selection    model.Selection
-	profile      system.PlatformProfile
+	id             string
+	component      model.ComponentID
+	homeDir        string
+	workspaceDir   string
+	agents         []model.AgentID
+	selection      model.Selection
+	profile        system.PlatformProfile
+	devSkillsRepo  string
 }
 
 func (s componentApplyStep) ID() string {
@@ -624,6 +629,27 @@ func (s componentApplyStep) Run() error {
 			}
 		}
 		return nil
+	case model.ComponentDevSkills:
+		cfg, _ := devskills.ReadConfig(s.homeDir)
+		repoURL := s.devSkillsRepo
+		if repoURL == "" {
+			repoURL = cfg.RepoURL
+		}
+		if repoURL == "" {
+			repoURL = devskills.DefaultRepoURL
+		}
+		targetDir := filepath.Join(s.homeDir, ".informa-wizard", "dev-skills")
+		if _, err := os.Stat(targetDir); os.IsNotExist(err) {
+			if err := devskills.Clone(repoURL, targetDir); err != nil {
+				return fmt.Errorf("clone dev-skills repo: %w", err)
+			}
+		}
+		for _, adapter := range adapters {
+			if _, err := devskills.InjectSkills(s.homeDir, adapter, s.selection.DevSkillSelections); err != nil {
+				return fmt.Errorf("inject dev-skills for %q: %w", adapter.Agent(), err)
+			}
+		}
+		return devskills.WriteConfig(s.homeDir, devskills.Config{RepoURL: repoURL, InstalledSkills: s.selection.DevSkillSelections})
 	default:
 		return fmt.Errorf("component %q is not supported in install runtime", s.component)
 	}
@@ -674,7 +700,7 @@ func BuildRealStagePlan(homeDir string, selection model.Selection, resolved plan
 		return pipeline.StagePlan{}, fmt.Errorf("create backup root directory %q: %w", backupRoot, err)
 	}
 
-	runtime, err := newInstallRuntime(homeDir, selection, resolved, profile)
+	runtime, err := newInstallRuntime(homeDir, selection, resolved, profile, "")
 	if err != nil {
 		return pipeline.StagePlan{}, err
 	}
