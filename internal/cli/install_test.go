@@ -54,6 +54,7 @@ func TestNormalizeInstallFlagsDefaults(t *testing.T) {
 			model.ComponentPermission,
 			model.ComponentGGA,
 			model.ComponentMonday,
+			model.ComponentDevSkills,
 		},
 	}
 

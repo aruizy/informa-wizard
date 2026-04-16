@@ -144,9 +144,9 @@ func normalizeSDDMode(value string) (model.SDDModeID, error) {
 func componentsForPreset(preset model.PresetID) []model.ComponentID {
 	switch preset {
 	case model.PresetMinimal:
-		return []model.ComponentID{model.ComponentSDD}
+		return []model.ComponentID{model.ComponentSDD, model.ComponentDevSkills}
 	case model.PresetEcosystemOnly:
-		return []model.ComponentID{model.ComponentSDD, model.ComponentSkills, model.ComponentContext7, model.ComponentGGA, model.ComponentMonday}
+		return []model.ComponentID{model.ComponentSDD, model.ComponentSkills, model.ComponentContext7, model.ComponentGGA, model.ComponentMonday, model.ComponentDevSkills}
 	case model.PresetCustom:
 		return nil
 	default:
@@ -158,6 +158,7 @@ func componentsForPreset(preset model.PresetID) []model.ComponentID {
 			model.ComponentPermission,
 			model.ComponentGGA,
 			model.ComponentMonday,
+			model.ComponentDevSkills,
 		}
 	}
 }
