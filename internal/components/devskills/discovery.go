@@ -15,6 +15,19 @@ type DiscoveredSkill struct {
 	Description string
 }
 
+// KnownSkills returns the hardcoded catalog of skills available in the
+// dev-skills repository. Used by the TUI before the repo is cloned.
+func KnownSkills() []DiscoveredSkill {
+	return []DiscoveredSkill{
+		{ID: "context0-instructions", Name: "Context0 Instructions", Description: "AI-optimized documentation in docs/instructions/"},
+		{ID: "human-documentation", Name: "Human Documentation", Description: "Human-readable docs generation and maintenance"},
+		{ID: "informads-development", Name: "InformaDS Development", Description: "InformaDS React component library patterns"},
+		{ID: "java-development", Name: "Java Development", Description: "Java 21+ idiomatic code, Spring Boot, clean architecture"},
+		{ID: "java-testing", Name: "Java Testing", Description: "JUnit 6, Spring Boot testing, JaCoCo coverage"},
+		{ID: "skill-creator", Name: "Skill Creator", Description: "Create, evaluate and iterate new AI agent skills"},
+	}
+}
+
 // DiscoverSkills scans the skills/ subdirectory of repoDir and returns the
 // discovered skills sorted alphabetically by ID.
 //
