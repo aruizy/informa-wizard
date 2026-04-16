@@ -2369,8 +2369,25 @@ func (m *Model) initDevSkillPicker() {
 	if len(m.DevSkills) > 0 {
 		return // already initialized, preserve selections
 	}
-	m.DevSkills = devskills.KnownSkills()
-	m.DevSkillChecked = make([]bool, len(m.DevSkills))
+	homeDir, _ := os.UserHomeDir()
+	if homeDir == "" {
+		return
+	}
+	repoDir := filepath.Join(homeDir, ".informa-wizard", "dev-skills")
+
+	// Clone the repo if not already present so skills can be discovered.
+	if _, err := os.Stat(repoDir); os.IsNotExist(err) {
+		_ = devskills.Clone(devskills.DefaultRepoURL, repoDir)
+	}
+
+	discovered, err := devskills.DiscoverSkills(repoDir)
+	if err != nil {
+		m.DevSkills = nil
+		m.DevSkillChecked = nil
+		return
+	}
+	m.DevSkills = discovered
+	m.DevSkillChecked = make([]bool, len(discovered))
 	m.DevSkillCursor = 0
 }
 
