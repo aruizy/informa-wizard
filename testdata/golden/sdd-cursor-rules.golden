@@ -104,7 +104,7 @@ The orchestrator supports three execution modes. The user selects one when start
 |------|----------|-------------|
 | **plan-build** (default) | Definition phases run continuously — only pause on HALT CONDITIONS. Always stop at PRE-IMPLEMENTATION GATE before apply. Build phases run sequentially after approval. | Most changes — gives the user control with minimal interruption |
 | **interactive** | Pause after each phase, show result, ask for confirmation before proceeding. | New users learning SDD, or high-risk changes needing per-phase review |
-| **automatic** | Run all phases sequentially without pausing (except at PRE-IMPLEMENTATION GATE). Report a combined summary at the end. | Well-understood changes where the user trusts the pipeline |
+| **automatic** | Run all phases sequentially without pausing. Report a combined summary at the end. | Well-understood changes where the user trusts the pipeline |
 
 If no mode is specified, default to **plan-build**.
 
@@ -141,7 +141,7 @@ When ALL definition phases are complete and the next step is implementation (app
    - "Save for later, don't implement now"
 
 Do NOT begin implementation until the user explicitly selects to proceed.
-This gate applies even during **automatic** mode and `/sdd-ff` — fast-forward runs all definition phases continuously but ALWAYS stops at this gate before apply.
+This gate applies during **plan-build** and **interactive** modes. In **automatic** mode and `/sdd-ff`, the gate is skipped — implementation proceeds immediately after definition phases complete.
 
 ### Sub-Agent Output Evaluation
 
