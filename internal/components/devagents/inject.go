@@ -48,6 +48,12 @@ func InjectAgents(homeDir string, adapter agents.Adapter, agentIDs []string) (In
 	repoDir := filepath.Join(homeDir, ".informa-wizard", "dev-agents")
 	destDir := sai.SubAgentsDir(homeDir)
 
+	// VS Code orchestrator agents go to the prompts/ subdirectory,
+	// not the root User dir (which is for SDD sub-agents).
+	if adapter.Agent() == model.AgentVSCodeCopilot {
+		destDir = filepath.Join(destDir, "prompts")
+	}
+
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		return InjectionResult{}, fmt.Errorf("dev-agents: create dest dir %q: %w", destDir, err)
 	}
