@@ -14,6 +14,7 @@ import (
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agentbuilder"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/backup"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/catalog"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/devagents"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/devskills"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/sdd"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
@@ -170,6 +171,7 @@ const (
 	ScreenDependencyTree
 	ScreenSkillPicker
 	ScreenDevSkillPicker
+	ScreenDevAgentPicker
 	ScreenReview
 	ScreenInstalling
 	ScreenModelPicker
@@ -220,6 +222,9 @@ type Model struct {
 	DevSkills         []devskills.DiscoveredSkill
 	DevSkillChecked   []bool
 	DevSkillCursor    int
+	DevAgents         []devagents.DiscoveredAgent
+	DevAgentChecked   []bool
+	DevAgentCursor    int
 	Err               error
 
 	// SelectedBackup holds the manifest chosen on ScreenBackups, used by the
@@ -651,6 +656,8 @@ func (m Model) View() string {
 		return screens.RenderSkillPicker(m.SkillPicker, m.Cursor)
 	case ScreenDevSkillPicker:
 		return screens.RenderDevSkillPicker(m.DevSkills, m.DevSkillChecked, m.Cursor)
+	case ScreenDevAgentPicker:
+		return screens.RenderDevAgentPicker(m.DevAgents, m.DevAgentChecked, m.Cursor)
 	case ScreenMonday:
 		return screens.RenderMonday(m.MondayTokenInput, m.MondayBoardInput, m.MondayActiveField, mondayCursorPos(m))
 	case ScreenReview:
@@ -866,6 +873,8 @@ func (m Model) handleKeyPress(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.toggleCurrentSkill()
 		case ScreenDevSkillPicker:
 			m.toggleCurrentDevSkill()
+		case ScreenDevAgentPicker:
+			m.toggleCurrentDevAgent()
 		}
 		return m, nil
 	case "r":
@@ -1461,6 +1470,17 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 		m.Selection.DevSkillSelections = selections
 		m.goToReviewOrMonday()
 		return m, nil
+	case ScreenDevAgentPicker:
+		// Enter on DevAgentPicker: collect checked agent IDs and advance.
+		selections := make([]string, 0, len(m.DevAgentChecked))
+		for idx, checked := range m.DevAgentChecked {
+			if checked && idx < len(m.DevAgents) {
+				selections = append(selections, m.DevAgents[idx].ID)
+			}
+		}
+		m.Selection.DevAgentSelections = selections
+		m.goToMondayOrReview()
+		return m, nil
 	case ScreenMonday:
 		// Enter on Monday screen: save inputs and proceed to Review.
 		m.Selection.Monday.Token = m.MondayTokenInput
@@ -1474,7 +1494,9 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 		}
 		// Back — in custom preset, walk back through the screens that were shown.
 		if m.Selection.Preset == model.PresetCustom {
-			if m.shouldShowDevSkillPickerScreen() {
+			if m.shouldShowDevAgentPickerScreen() {
+				m.setScreen(ScreenDevAgentPicker)
+			} else if m.shouldShowDevSkillPickerScreen() {
 				m.setScreen(ScreenDevSkillPicker)
 			} else if m.shouldShowSkillPickerScreen() {
 				if len(m.SkillPicker) == 0 {
@@ -1960,22 +1982,42 @@ func (m Model) goBack() Model {
 		return m
 	}
 
+	// Going back from DevAgentPicker: return to DevSkillPicker if shown, else DependencyTree.
+	if m.Screen == ScreenDevAgentPicker {
+		if m.shouldShowDevSkillPickerScreen() {
+			m.setScreen(ScreenDevSkillPicker)
+		} else {
+			m.setScreen(ScreenDependencyTree)
+		}
+		return m
+	}
+
 	// Going back from Review: if Monday screen was shown, go there first.
-	// Then check DevSkillPicker.
+	// Then check DevAgentPicker, then DevSkillPicker.
 	if m.Screen == ScreenReview && m.shouldShowMondayScreen() {
 		m.setScreen(ScreenMonday)
 		return m
 	}
 
-	// Going back from Review: if DevSkillPicker was shown (and Monday was not), go there.
+	// Going back from Review: if DevAgentPicker was shown (and Monday was not), go there.
+	if m.Screen == ScreenReview && m.shouldShowDevAgentPickerScreen() {
+		m.setScreen(ScreenDevAgentPicker)
+		return m
+	}
+
+	// Going back from Review: if DevSkillPicker was shown (and Monday and DevAgentPicker were not), go there.
 	if m.Screen == ScreenReview && m.shouldShowDevSkillPickerScreen() {
 		m.setScreen(ScreenDevSkillPicker)
 		return m
 	}
 
-	// Going back from Monday: if DevSkillPicker was shown, go there.
-	// Otherwise return to DependencyTree (or SkillPicker in custom).
+	// Going back from Monday: if DevAgentPicker was shown, go there.
+	// Then DevSkillPicker, otherwise return to DependencyTree (or SkillPicker in custom).
 	if m.Screen == ScreenMonday {
+		if m.shouldShowDevAgentPickerScreen() {
+			m.setScreen(ScreenDevAgentPicker)
+			return m
+		}
 		if m.shouldShowDevSkillPickerScreen() {
 			m.setScreen(ScreenDevSkillPicker)
 			return m
@@ -1993,8 +2035,12 @@ func (m Model) goBack() Model {
 	}
 
 	// In custom preset, going back from Review walks through intermediate screens.
-	// Order (reverse of forward): DevSkillPicker → SkillPicker → StrictTDD → SDDMode/ModelPicker → ClaudeModelPicker → DependencyTree.
+	// Order (reverse of forward): DevAgentPicker → DevSkillPicker → SkillPicker → StrictTDD → SDDMode/ModelPicker → ClaudeModelPicker → DependencyTree.
 	if m.Screen == ScreenReview && m.Selection.Preset == model.PresetCustom {
+		if m.shouldShowDevAgentPickerScreen() {
+			m.setScreen(ScreenDevAgentPicker)
+			return m
+		}
 		if m.shouldShowDevSkillPickerScreen() {
 			m.setScreen(ScreenDevSkillPicker)
 			return m
@@ -2244,6 +2290,8 @@ func (m Model) optionCount() int {
 		return screens.SkillPickerOptionCount()
 	case ScreenDevSkillPicker:
 		return len(m.DevSkills)
+	case ScreenDevAgentPicker:
+		return len(m.DevAgents)
 	case ScreenMonday:
 		return 0 // text input mode — no cursor navigation
 	case ScreenReview:
@@ -2355,6 +2403,16 @@ func (m *Model) toggleCurrentDevSkill() {
 	}
 }
 
+// toggleCurrentDevAgent toggles the checked state of the dev agent at the current cursor position.
+func (m *Model) toggleCurrentDevAgent() {
+	if m.Cursor < 0 || m.Cursor >= len(m.DevAgents) {
+		return
+	}
+	if m.Cursor < len(m.DevAgentChecked) {
+		m.DevAgentChecked[m.Cursor] = !m.DevAgentChecked[m.Cursor]
+	}
+}
+
 // initSkillPicker pre-selects ALL available skills (custom mode default).
 func (m *Model) initSkillPicker() {
 	all := screens.AllSkillsOrdered()
@@ -2389,6 +2447,35 @@ func (m *Model) initDevSkillPicker() {
 	m.DevSkills = discovered
 	m.DevSkillChecked = make([]bool, len(discovered))
 	m.DevSkillCursor = 0
+}
+
+// initDevAgentPicker attempts to discover dev-agents from the cloned repo.
+// If the repo is not yet cloned, DevAgents is left as an empty slice —
+// the user can still proceed; agents will be injected after clone during install.
+func (m *Model) initDevAgentPicker() {
+	if len(m.DevAgents) > 0 {
+		return // already initialized, preserve selections
+	}
+	homeDir, _ := os.UserHomeDir()
+	if homeDir == "" {
+		return
+	}
+	repoDir := filepath.Join(homeDir, ".informa-wizard", "dev-agents")
+
+	// Clone the repo if not already present so agents can be discovered.
+	if _, err := os.Stat(repoDir); os.IsNotExist(err) {
+		_ = devagents.Clone(devagents.DefaultRepoURL, repoDir)
+	}
+
+	discovered, err := devagents.DiscoverAgents(repoDir)
+	if err != nil {
+		m.DevAgents = nil
+		m.DevAgentChecked = nil
+		return
+	}
+	m.DevAgents = discovered
+	m.DevAgentChecked = make([]bool, len(discovered))
+	m.DevAgentCursor = 0
 }
 
 // shouldShowSkillPickerScreen returns true when the custom preset is active
@@ -2527,15 +2614,38 @@ func (m Model) shouldShowDevSkillPickerScreen() bool {
 	return hasSelectedComponent(m.Selection.Components, model.ComponentDevSkills)
 }
 
+// shouldShowDevAgentPickerScreen returns true when the DevAgents component is selected.
+func (m Model) shouldShowDevAgentPickerScreen() bool {
+	return hasSelectedComponent(m.Selection.Components, model.ComponentDevAgents)
+}
+
 // goToReviewOrMonday navigates to the DevSkillPicker screen (when the DevSkills
-// component is selected and we're not already on that screen), then to the Monday
-// config screen if needed, otherwise directly to Review.
+// component is selected and we're not already on that screen), then to the
+// DevAgentPicker screen (when the DevAgents component is selected and we're not
+// already on that screen), then to the Monday config screen if needed, otherwise
+// directly to Review.
 func (m *Model) goToReviewOrMonday() {
 	if m.shouldShowDevSkillPickerScreen() && m.Screen != ScreenDevSkillPicker {
 		m.initDevSkillPicker()
 		m.setScreen(ScreenDevSkillPicker)
 		return
 	}
+	if m.shouldShowDevAgentPickerScreen() && m.Screen != ScreenDevAgentPicker {
+		m.initDevAgentPicker()
+		m.setScreen(ScreenDevAgentPicker)
+		return
+	}
+	if m.shouldShowMondayScreen() && m.MondayTokenInput == "" {
+		m.setScreen(ScreenMonday)
+		return
+	}
+	m.Review = planner.BuildReviewPayload(m.Selection, m.DependencyPlan)
+	m.setScreen(ScreenReview)
+}
+
+// goToMondayOrReview navigates to the Monday config screen (if needed) or
+// directly to Review. Called after the DevAgentPicker is confirmed.
+func (m *Model) goToMondayOrReview() {
 	if m.shouldShowMondayScreen() && m.MondayTokenInput == "" {
 		m.setScreen(ScreenMonday)
 		return
@@ -2559,9 +2669,9 @@ func (m Model) shouldShowClaudeModelPickerScreen() bool {
 func componentsForPreset(preset model.PresetID) []model.ComponentID {
 	switch preset {
 	case model.PresetMinimal:
-		return []model.ComponentID{model.ComponentSDD, model.ComponentDevSkills}
+		return []model.ComponentID{model.ComponentSDD, model.ComponentDevSkills, model.ComponentDevAgents}
 	case model.PresetEcosystemOnly:
-		return []model.ComponentID{model.ComponentSDD, model.ComponentSkills, model.ComponentContext7, model.ComponentGGA, model.ComponentMonday, model.ComponentDevSkills}
+		return []model.ComponentID{model.ComponentSDD, model.ComponentSkills, model.ComponentContext7, model.ComponentGGA, model.ComponentMonday, model.ComponentDevSkills, model.ComponentDevAgents}
 	case model.PresetCustom:
 		return nil
 	default:
@@ -2574,6 +2684,7 @@ func componentsForPreset(preset model.PresetID) []model.ComponentID {
 			model.ComponentGGA,
 			model.ComponentMonday,
 			model.ComponentDevSkills,
+			model.ComponentDevAgents,
 		}
 	}
 }

@@ -37,6 +37,7 @@ const (
 	ComponentTheme      ComponentID = "theme"
 	ComponentMonday     ComponentID = "monday"
 	ComponentDevSkills  ComponentID = "dev-skills"
+	ComponentDevAgents  ComponentID = "dev-agents"
 )
 
 type SkillID string

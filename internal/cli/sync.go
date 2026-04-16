@@ -12,6 +12,7 @@ import (
 
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/backup"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/devagents"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/devskills"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/engram"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/gga"
@@ -604,6 +605,33 @@ func (s componentSyncStep) Run() error {
 			res, err := devskills.InjectSkills(s.homeDir, adapter, cfg.InstalledSkills)
 			if err != nil {
 				return fmt.Errorf("inject dev-skills for %q: %w", adapter.Agent(), err)
+			}
+			s.countChanged(boolToInt(res.Changed))
+		}
+		return nil
+
+	case model.ComponentDevAgents:
+		agentCfg, err := devagents.ReadConfig(s.homeDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "WARNING: dev-agents config read failed: %v\n", err)
+		}
+		if agentCfg.RepoURL == "" || len(agentCfg.InstalledAgents) == 0 {
+			return nil
+		}
+		targetDir := filepath.Join(s.homeDir, ".informa-wizard", "dev-agents")
+		if _, statErr := os.Stat(targetDir); statErr != nil {
+			if os.IsNotExist(statErr) {
+				return fmt.Errorf("dev-agents repo not found at %s; run install to re-clone", targetDir)
+			}
+			return fmt.Errorf("check dev-agents dir: %w", statErr)
+		}
+		if err := devagents.Pull(targetDir); err != nil {
+			return fmt.Errorf("pull dev-agents repo: %w", err)
+		}
+		for _, adapter := range adapters {
+			res, err := devagents.InjectAgents(s.homeDir, adapter, agentCfg.InstalledAgents)
+			if err != nil {
+				return fmt.Errorf("inject dev-agents for %q: %w", adapter.Agent(), err)
 			}
 			s.countChanged(boolToInt(res.Changed))
 		}

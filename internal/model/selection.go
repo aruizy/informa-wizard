@@ -19,6 +19,7 @@ type Selection struct {
 	Profiles               []Profile                   // named SDD profiles to generate/update during sync
 	Monday                 MondayConfig                // Monday.com integration config
 	DevSkillSelections     []string                    // individual skill IDs selected for dev-skills component
+	DevAgentSelections     []string                    // individual agent IDs selected for dev-agents component
 }
 
 func (s Selection) HasAgent(agent AgentID) bool {

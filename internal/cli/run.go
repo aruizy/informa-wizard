@@ -13,6 +13,7 @@ import (
 
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/backup"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/devagents"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/devskills"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/engram"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/gga"
@@ -657,6 +658,31 @@ func (s componentApplyStep) Run() error {
 			}
 		}
 		return devskills.WriteConfig(s.homeDir, devskills.Config{RepoURL: repoURL, InstalledSkills: s.selection.DevSkillSelections})
+	case model.ComponentDevAgents:
+		agentCfg, err := devagents.ReadConfig(s.homeDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "WARNING: dev-agents config read failed: %v\n", err)
+		}
+		repoURL := agentCfg.RepoURL
+		if repoURL == "" {
+			repoURL = devagents.DefaultRepoURL
+		}
+		targetDir := filepath.Join(s.homeDir, ".informa-wizard", "dev-agents")
+		if _, statErr := os.Stat(targetDir); statErr != nil {
+			if !os.IsNotExist(statErr) {
+				return fmt.Errorf("check dev-agents dir: %w", statErr)
+			}
+			// Dir doesn't exist — clone it.
+			if err := devagents.Clone(repoURL, targetDir); err != nil {
+				return fmt.Errorf("clone dev-agents repo: %w", err)
+			}
+		}
+		for _, adapter := range adapters {
+			if _, err := devagents.InjectAgents(s.homeDir, adapter, s.selection.DevAgentSelections); err != nil {
+				return fmt.Errorf("inject dev-agents for %q: %w", adapter.Agent(), err)
+			}
+		}
+		return devagents.WriteConfig(s.homeDir, devagents.Config{RepoURL: repoURL, InstalledAgents: s.selection.DevAgentSelections})
 	default:
 		return fmt.Errorf("component %q is not supported in install runtime", s.component)
 	}
@@ -1016,6 +1042,25 @@ func componentPaths(homeDir string, selection model.Selection, adapters []agents
 					if cfgErr == nil {
 						for _, skillID := range cfg.InstalledSkills {
 							paths = append(paths, filepath.Join(skillsDir, skillID, "SKILL.md"))
+						}
+					}
+				}
+			}
+		case model.ComponentDevAgents:
+			if sai, ok := adapter.(interface {
+				SupportsSubAgents() bool
+				SubAgentsDir(homeDir string) string
+			}); ok && sai.SupportsSubAgents() {
+				agentsDir := sai.SubAgentsDir(homeDir)
+				if agentsDir != "" {
+					agentCfg, cfgErr := devagents.ReadConfig(homeDir)
+					if cfgErr == nil {
+						suffix := ".md"
+						if adapter.Agent() == model.AgentVSCodeCopilot {
+							suffix = ".agent.md"
+						}
+						for _, agentID := range agentCfg.InstalledAgents {
+							paths = append(paths, filepath.Join(agentsDir, agentID+suffix))
 						}
 					}
 				}

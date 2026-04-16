@@ -45,6 +45,7 @@ func MVPGraph() Graph {
 		model.ComponentTheme:      nil,
 		model.ComponentMonday:     nil,
 		model.ComponentDevSkills:  nil,
+		model.ComponentDevAgents:  nil,
 	})
 }
 
