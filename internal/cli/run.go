@@ -630,7 +630,10 @@ func (s componentApplyStep) Run() error {
 		}
 		return nil
 	case model.ComponentDevSkills:
-		cfg, _ := devskills.ReadConfig(s.homeDir)
+		cfg, err := devskills.ReadConfig(s.homeDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "WARNING: dev-skills config read failed: %v\n", err)
+		}
 		repoURL := s.devSkillsRepo
 		if repoURL == "" {
 			repoURL = cfg.RepoURL
@@ -639,7 +642,11 @@ func (s componentApplyStep) Run() error {
 			repoURL = devskills.DefaultRepoURL
 		}
 		targetDir := filepath.Join(s.homeDir, ".informa-wizard", "dev-skills")
-		if _, err := os.Stat(targetDir); os.IsNotExist(err) {
+		if _, statErr := os.Stat(targetDir); statErr != nil {
+			if !os.IsNotExist(statErr) {
+				return fmt.Errorf("check dev-skills dir: %w", statErr)
+			}
+			// Dir doesn't exist — clone it
 			if err := devskills.Clone(repoURL, targetDir); err != nil {
 				return fmt.Errorf("clone dev-skills repo: %w", err)
 			}
@@ -999,6 +1006,18 @@ func componentPaths(homeDir string, selection model.Selection, adapters []agents
 			case model.StrategyMCPConfigFile:
 				if p := adapter.MCPConfigPath(homeDir, "monday"); p != "" {
 					paths = append(paths, p)
+				}
+			}
+		case model.ComponentDevSkills:
+			if adapter.SupportsSkills() {
+				skillsDir := adapter.SkillsDir(homeDir)
+				if skillsDir != "" {
+					cfg, cfgErr := devskills.ReadConfig(homeDir)
+					if cfgErr == nil {
+						for _, skillID := range cfg.InstalledSkills {
+							paths = append(paths, filepath.Join(skillsDir, skillID, "SKILL.md"))
+						}
+					}
 				}
 			}
 		}

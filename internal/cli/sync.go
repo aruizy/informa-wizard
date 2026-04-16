@@ -583,11 +583,20 @@ func (s componentSyncStep) Run() error {
 		return nil
 
 	case model.ComponentDevSkills:
-		cfg, _ := devskills.ReadConfig(s.homeDir)
+		cfg, err := devskills.ReadConfig(s.homeDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "WARNING: dev-skills config read failed: %v\n", err)
+		}
 		if cfg.RepoURL == "" || len(cfg.InstalledSkills) == 0 {
 			return nil
 		}
 		targetDir := filepath.Join(s.homeDir, ".informa-wizard", "dev-skills")
+		if _, statErr := os.Stat(targetDir); statErr != nil {
+			if os.IsNotExist(statErr) {
+				return fmt.Errorf("dev-skills repo not found at %s; run install to re-clone", targetDir)
+			}
+			return fmt.Errorf("check dev-skills dir: %w", statErr)
+		}
 		if err := devskills.Pull(targetDir); err != nil {
 			return fmt.Errorf("pull dev-skills repo: %w", err)
 		}

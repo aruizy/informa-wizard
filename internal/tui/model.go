@@ -2366,6 +2366,9 @@ func (m *Model) initSkillPicker() {
 // If the repo is not yet cloned, DevSkills is left as an empty slice —
 // the user can still proceed; skills will be injected after clone during install.
 func (m *Model) initDevSkillPicker() {
+	if len(m.DevSkills) > 0 {
+		return // already initialized, preserve selections
+	}
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		m.DevSkills = nil
