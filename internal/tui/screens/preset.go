@@ -11,15 +11,13 @@ func PresetOptions() []model.PresetID {
 	return []model.PresetID{
 		model.PresetFull,
 		model.PresetEcosystemOnly,
-		model.PresetMinimal,
 		model.PresetCustom,
 	}
 }
 
 var presetDescriptions = map[model.PresetID]string{
-	model.PresetFull: "Everything: memory, SDD, skills, docs & security",
-	model.PresetEcosystemOnly: "Core tools only: memory, SDD, skills & docs",
-	model.PresetMinimal:       "Just Engram persistent memory",
+	model.PresetFull:          "Everything: SDD, skills, permissions & dev tools",
+	model.PresetEcosystemOnly: "Core tools: SDD, skills & dev tools",
 	model.PresetCustom:        "Pick individual components yourself",
 }
 
