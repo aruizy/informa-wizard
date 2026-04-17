@@ -494,40 +494,42 @@ func Inject(homeDir string, adapter agents.Adapter, sddMode model.SDDModeID, opt
 		}
 
 		embeddedDir := sai.EmbeddedSubAgentsDir()
-		entries, err := assets.FS.ReadDir(embeddedDir)
-		if err != nil {
-			return InjectionResult{}, fmt.Errorf("read embedded agents dir: %w", err)
-		}
-
-		for _, entry := range entries {
-			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
-				continue
-			}
-			content := assets.MustRead(embeddedDir + "/" + entry.Name())
-			outPath := filepath.Join(agentsDir, entry.Name())
-			writeResult, err := filemerge.WriteFileAtomic(outPath, []byte(content), 0o644)
+		if embeddedDir != "" {
+			entries, err := assets.FS.ReadDir(embeddedDir)
 			if err != nil {
-				return InjectionResult{}, fmt.Errorf("write agent %s: %w", entry.Name(), err)
+				return InjectionResult{}, fmt.Errorf("read embedded agents dir: %w", err)
 			}
-			changed = changed || writeResult.Changed
-			if writeResult.Changed {
-				files = append(files, outPath)
-			}
-		}
 
-		// Post-check: verify critical agent files exist (supports both
-		// agent.md and .agent.md naming conventions).
-		for _, phase := range []string{"sdd-apply", "sdd-verify"} {
-			found := false
-			for _, suffix := range []string{".md", ".agent.md"} {
-				checkPath := filepath.Join(agentsDir, phase+suffix)
-				if info, err := os.Stat(checkPath); err == nil && info.Size() >= 50 {
-					found = true
-					break
+			for _, entry := range entries {
+				if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+					continue
+				}
+				content := assets.MustRead(embeddedDir + "/" + entry.Name())
+				outPath := filepath.Join(agentsDir, entry.Name())
+				writeResult, err := filemerge.WriteFileAtomic(outPath, []byte(content), 0o644)
+				if err != nil {
+					return InjectionResult{}, fmt.Errorf("write agent %s: %w", entry.Name(), err)
+				}
+				changed = changed || writeResult.Changed
+				if writeResult.Changed {
+					files = append(files, outPath)
 				}
 			}
-			if !found {
-				return InjectionResult{}, fmt.Errorf("post-check: agent %q not written correctly in %s", phase, agentsDir)
+
+			// Post-check: verify critical agent files exist (supports both
+			// agent.md and .agent.md naming conventions).
+			for _, phase := range []string{"sdd-apply", "sdd-verify"} {
+				found := false
+				for _, suffix := range []string{".md", ".agent.md"} {
+					checkPath := filepath.Join(agentsDir, phase+suffix)
+					if info, err := os.Stat(checkPath); err == nil && info.Size() >= 50 {
+						found = true
+						break
+					}
+				}
+				if !found {
+					return InjectionResult{}, fmt.Errorf("post-check: agent %q not written correctly in %s", phase, agentsDir)
+				}
 			}
 		}
 	}

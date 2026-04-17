@@ -593,12 +593,20 @@ func (s componentApplyStep) Run() error {
 				return fmt.Errorf("clone dev-skills repo: %w", err)
 			}
 		}
+		skillSelections := s.selection.DevSkillSelections
+		if len(skillSelections) == 0 {
+			if discovered, discErr := devskills.DiscoverSkills(targetDir); discErr == nil {
+				for _, ds := range discovered {
+					skillSelections = append(skillSelections, ds.ID)
+				}
+			}
+		}
 		for _, adapter := range adapters {
-			if _, err := devskills.InjectSkills(s.homeDir, adapter, s.selection.DevSkillSelections); err != nil {
+			if _, err := devskills.InjectSkills(s.homeDir, adapter, skillSelections); err != nil {
 				return fmt.Errorf("inject dev-skills for %q: %w", adapter.Agent(), err)
 			}
 		}
-		return devskills.WriteConfig(s.homeDir, devskills.Config{RepoURL: repoURL, InstalledSkills: s.selection.DevSkillSelections})
+		return devskills.WriteConfig(s.homeDir, devskills.Config{RepoURL: repoURL, InstalledSkills: skillSelections})
 	case model.ComponentDevAgents:
 		agentCfg, err := devagents.ReadConfig(s.homeDir)
 		if err != nil {
@@ -618,12 +626,20 @@ func (s componentApplyStep) Run() error {
 				return fmt.Errorf("clone dev-agents repo: %w", err)
 			}
 		}
+		agentSelections := s.selection.DevAgentSelections
+		if len(agentSelections) == 0 {
+			if discovered, discErr := devagents.DiscoverAgents(targetDir); discErr == nil {
+				for _, da := range discovered {
+					agentSelections = append(agentSelections, da.ID)
+				}
+			}
+		}
 		for _, adapter := range adapters {
-			if _, err := devagents.InjectAgents(s.homeDir, adapter, s.selection.DevAgentSelections); err != nil {
+			if _, err := devagents.InjectAgents(s.homeDir, adapter, agentSelections); err != nil {
 				return fmt.Errorf("inject dev-agents for %q: %w", adapter.Agent(), err)
 			}
 		}
-		return devagents.WriteConfig(s.homeDir, devagents.Config{RepoURL: repoURL, InstalledAgents: s.selection.DevAgentSelections})
+		return devagents.WriteConfig(s.homeDir, devagents.Config{RepoURL: repoURL, InstalledAgents: agentSelections})
 	default:
 		return fmt.Errorf("component %q is not supported in install runtime", s.component)
 	}
