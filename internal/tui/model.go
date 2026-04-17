@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
@@ -1749,8 +1750,11 @@ func (m Model) startUpgradeSync() tea.Cmd {
 			candidate := dir
 			for i := 0; i < 5; i++ {
 				if _, err := os.Stat(filepath.Join(candidate, ".git")); err == nil {
-					// Found the git root — pull it (best effort).
+					// Found the git root — pull then rebuild.
 					_ = devskills.Pull(candidate)
+					goInstall := exec.Command("go", "install", "./cmd/informa-wizard")
+					goInstall.Dir = candidate
+					_ = goInstall.Run()
 					break
 				}
 				parent := filepath.Dir(candidate)
