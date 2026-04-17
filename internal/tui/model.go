@@ -376,15 +376,7 @@ func NewModel(detection system.DetectionResult, version string) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	version := m.Version
-	profile := m.Detection.System.Profile
-
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		results := update.CheckAll(ctx, version, profile)
-		return UpdateCheckResultMsg{Results: results}
-	}
+	return nil
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -399,8 +391,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tickCmd()
 		}
 		// Keep spinner running for operation screens.
-		if m.OperationRunning || (m.Screen == ScreenUpgrade && !m.UpdateCheckDone) ||
-			(m.Screen == ScreenUpgradeSync && !m.UpdateCheckDone) {
+		if m.OperationRunning || (m.Screen == ScreenUpgrade && !m.UpdateCheckDone) {
 			m.SpinnerFrame = (m.SpinnerFrame + 1) % 10
 			return m, tickCmd()
 		}
@@ -464,7 +455,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.UpdateResults = nil
 		m.UpdateCheckDone = false
-		return m, m.Init()
+		return m, nil
 	case SyncDoneMsg:
 		m.OperationRunning = false
 		m.SyncFilesChanged = msg.FilesChanged
@@ -487,15 +478,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} // else keep existing list
 		return m, nil
 	case UpgradePhaseCompletedMsg:
-		// Upgrade phase done; sync phase is about to start (OperationRunning stays true).
+		// Pull phase done; sync phase is about to start (OperationRunning stays true).
 		m.UpgradeErr = msg.Err
-		if msg.Err == nil {
+		if msg.Err == nil && msg.Report.Results != nil {
 			report := msg.Report
 			m.UpgradeReport = &report
 		}
 		m.UpdateResults = nil
 		m.UpdateCheckDone = false
-		return m, m.Init()
+		return m, nil
 	case tea.KeyMsg:
 		if m.Screen == ScreenRenameBackup {
 			return m.handleRenameInput(msg)
@@ -607,11 +598,7 @@ func (m Model) findProgressItem(stepID string) int {
 func (m Model) View() string {
 	switch m.Screen {
 	case ScreenWelcome:
-		var banner string
-		if m.UpdateCheckDone && update.HasUpdates(m.UpdateResults) {
-			banner = "Updates available: " + update.UpdateSummaryLine(m.UpdateResults)
-		}
-		return screens.RenderWelcome(m.Cursor, m.Version, banner, m.UpdateResults, m.UpdateCheckDone, m.hasDetectedOpenCode(), len(m.ProfileList), m.hasAgentBuilderEngines(), m.CommitDate)
+		return screens.RenderWelcome(m.Cursor, m.Version, "", m.hasDetectedOpenCode(), len(m.ProfileList), m.hasAgentBuilderEngines(), m.CommitDate)
 	case ScreenUpgrade:
 		return screens.RenderUpgrade(m.UpdateResults, m.UpgradeReport, m.UpgradeErr, m.OperationRunning, m.UpdateCheckDone, m.Cursor, m.SpinnerFrame)
 	case ScreenSync:
@@ -943,24 +930,13 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			m.setScreen(ScreenDetection)
 		case 1:
 			m = m.withResetOperationState()
-			m.setScreen(ScreenUpgrade)
-			// Start spinner for update check waiting state.
-			if !m.UpdateCheckDone {
-				return m, tickCmd()
-			}
+			m.setScreen(ScreenSync)
 		case 2:
 			m = m.withResetOperationState()
-			m.setScreen(ScreenSync)
-		case 3:
-			m = m.withResetOperationState()
 			m.setScreen(ScreenUpgradeSync)
-			// Start spinner for update check waiting state.
-			if !m.UpdateCheckDone {
-				return m, tickCmd()
-			}
-		case 4:
+		case 3:
 			m.setScreen(ScreenModelConfig)
-		case 5:
+		case 4:
 			// "Create your own Agent" — blocked when no engines are available.
 			if !m.hasAgentBuilderEngines() {
 				return m, nil
@@ -974,7 +950,7 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			ta.SetHeight(5)
 			m.AgentBuilder.Textarea = ta
 			m.setScreen(ScreenAgentBuilderEngine)
-		case 6:
+		case 5:
 			if m.hasDetectedOpenCode() {
 				// "OpenCode SDD Profiles" (only shown when OpenCode is detected)
 				m.setScreen(ScreenProfiles)
@@ -982,7 +958,7 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 				// "Manage backups"
 				m.setScreen(ScreenBackups)
 			}
-		case 7:
+		case 6:
 			if m.hasDetectedOpenCode() {
 				// "Manage backups"
 				m.setScreen(ScreenBackups)
@@ -990,7 +966,7 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 				// "Quit"
 				return m, tea.Quit
 			}
-		case 8:
+		case 7:
 			// "Quit" (only reachable when showProfiles is true, so OpenCode is detected)
 			return m, tea.Quit
 		}
@@ -1754,40 +1730,64 @@ func (m Model) startSync(overrides *model.SyncOverrides) tea.Cmd {
 	}
 }
 
-// startUpgradeSync runs upgrade then sync sequentially via tea.Sequence.
-// Design decision: sync runs unconditionally regardless of upgrade outcome.
-// Tool-level upgrade failures are per-tool (in UpgradeReport.Results), not fatal.
-// The user sees both results and can re-run if needed.
+// startUpgradeSync runs git pulls then sync sequentially via tea.Sequence.
+// It pulls informa-wizard (if running from a git clone), dev-skills, and
+// dev-agents repos, then runs sync. Missing repos are skipped silently.
 //
-// The first command runs the upgrade and sends UpgradePhaseCompletedMsg
+// The first command runs the git pulls and sends UpgradePhaseCompletedMsg
 // (so the UI can show State 2: sync running). The second command runs sync
 // and sends SyncDoneMsg.
 func (m Model) startUpgradeSync() tea.Cmd {
-	upgradeFn := m.UpgradeFn
 	syncFn := m.SyncFn
-	updateResults := m.UpdateResults
 
-	upgradeCmd := func() tea.Msg {
-		if upgradeFn == nil {
-			return UpgradePhaseCompletedMsg{Err: fmt.Errorf("upgrade function not configured")}
+	pullCmd := func() tea.Msg {
+		// Pull informa-wizard itself if running from a git clone.
+		if exe, err := os.Executable(); err == nil {
+			dir := filepath.Dir(exe)
+			// Walk upward to find a .git directory (at most 5 levels).
+			candidate := dir
+			for i := 0; i < 5; i++ {
+				if _, err := os.Stat(filepath.Join(candidate, ".git")); err == nil {
+					// Found the git root — pull it (best effort).
+					_ = devskills.Pull(candidate)
+					break
+				}
+				parent := filepath.Dir(candidate)
+				if parent == candidate {
+					break
+				}
+				candidate = parent
+			}
 		}
-		ctx := context.Background()
-		report := upgradeFn(ctx, updateResults)
-		return UpgradePhaseCompletedMsg{Report: report}
+
+		// Pull dev-skills and dev-agents repos (skip silently if absent).
+		home := homeDir()
+		if home != "" {
+			devSkillsDir := filepath.Join(home, ".informa-wizard", "dev-skills")
+			if _, err := os.Stat(devSkillsDir); err == nil {
+				_ = devskills.Pull(devSkillsDir)
+			}
+			devAgentsDir := filepath.Join(home, ".informa-wizard", "dev-agents")
+			if _, err := os.Stat(devAgentsDir); err == nil {
+				_ = devagents.Pull(devAgentsDir)
+			}
+		}
+
+		return UpgradePhaseCompletedMsg{}
 	}
 
 	syncCmd := func() tea.Msg {
 		if syncFn == nil {
 			return SyncDoneMsg{Err: fmt.Errorf("sync function not configured")}
 		}
-		// Overrides are intentionally nil: upgrade-sync is triggered from
+		// Overrides are intentionally nil: update-sync is triggered from
 		// Welcome menu, not ModelConfig. PendingSyncOverrides is cleared
 		// by withResetOperationState before entering this flow.
 		filesChanged, err := syncFn(nil)
 		return SyncDoneMsg{FilesChanged: filesChanged, Err: err}
 	}
 
-	return tea.Sequence(upgradeCmd, syncCmd)
+	return tea.Sequence(pullCmd, syncCmd)
 }
 
 // restoreBackup triggers a backup restore in a goroutine.
@@ -2248,7 +2248,7 @@ func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) optionCount() int {
 	switch m.Screen {
 	case ScreenWelcome:
-		return len(screens.WelcomeOptions(m.UpdateResults, m.UpdateCheckDone, m.hasDetectedOpenCode(), len(m.ProfileList), m.hasAgentBuilderEngines()))
+		return len(screens.WelcomeOptions(m.hasDetectedOpenCode(), len(m.ProfileList), m.hasAgentBuilderEngines()))
 	case ScreenUpgrade:
 		if m.UpgradeReport != nil || m.UpgradeErr != nil {
 			return 1 // "return" option in results/error state

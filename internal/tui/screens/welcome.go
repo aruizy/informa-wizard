@@ -6,23 +6,15 @@ import (
 	"time"
 
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/tui/styles"
-	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/update"
 )
 
 // WelcomeOptions returns the welcome menu options.
 // When showProfiles is true, an "OpenCode SDD Profiles" option is inserted
-// between "Configure models" and "Manage backups".
+// between "Create your own Agent" and "Manage backups".
 // profileCount is used to show a badge with the current profile count.
 // When hasEngines is false, "Create your own Agent" is shown as disabled
 // (labelled "(no agents)") to signal that no supported AI engine is installed.
-func WelcomeOptions(updateResults []update.UpdateResult, updateCheckDone bool, showProfiles bool, profileCount int, hasEngines bool) []string {
-	upgradeLabel := "Upgrade tools"
-	if updateCheckDone && update.HasUpdates(updateResults) {
-		upgradeLabel = "Upgrade tools ★"
-	} else if updateCheckDone && !update.HasUpdates(updateResults) {
-		upgradeLabel = "Upgrade tools (up to date)"
-	}
-
+func WelcomeOptions(showProfiles bool, profileCount int, hasEngines bool) []string {
 	agentLabel := "Create your own Agent"
 	if !hasEngines {
 		agentLabel = "Create your own Agent (no agents)"
@@ -30,9 +22,8 @@ func WelcomeOptions(updateResults []update.UpdateResult, updateCheckDone bool, s
 
 	opts := []string{
 		"Start installation",
-		upgradeLabel,
 		"Sync configs",
-		"Upgrade + Sync",
+		"Update + Sync",
 		"Configure models",
 		agentLabel,
 	}
@@ -51,7 +42,7 @@ func WelcomeOptions(updateResults []update.UpdateResult, updateCheckDone bool, s
 	return opts
 }
 
-func RenderWelcome(cursor int, version string, updateBanner string, updateResults []update.UpdateResult, updateCheckDone bool, showProfiles bool, profileCount int, hasEngines bool, commitDate *time.Time) string {
+func RenderWelcome(cursor int, version string, updateBanner string, showProfiles bool, profileCount int, hasEngines bool, commitDate *time.Time) string {
 	var b strings.Builder
 
 	b.WriteString(styles.RenderLogo())
@@ -72,7 +63,7 @@ func RenderWelcome(cursor int, version string, updateBanner string, updateResult
 	b.WriteString("\n")
 	b.WriteString(styles.HeadingStyle.Render("Menu"))
 	b.WriteString("\n\n")
-	b.WriteString(renderOptions(WelcomeOptions(updateResults, updateCheckDone, showProfiles, profileCount, hasEngines), cursor))
+	b.WriteString(renderOptions(WelcomeOptions(showProfiles, profileCount, hasEngines), cursor))
 	b.WriteString("\n")
 	b.WriteString(styles.HelpStyle.Render("j/k: navigate • enter: select • q: quit"))
 

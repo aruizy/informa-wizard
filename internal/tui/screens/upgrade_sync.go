@@ -9,37 +9,33 @@ import (
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/update/upgrade"
 )
 
-// RenderUpgradeSync handles all states of the combined upgrade+sync screen.
+// RenderUpgradeSync handles all states of the combined update+sync screen.
 //
 // State logic:
-//  1. operationRunning && upgradeReport == nil && upgradeErr == nil → "Upgrading tools..." with spinner
+//  1. operationRunning && upgradeReport == nil && upgradeErr == nil → "Updating repositories..." with spinner
 //  2. operationRunning && (upgradeReport != nil || upgradeErr != nil) → "Syncing configurations..." with spinner
 //  3. !operationRunning && (upgradeReport != nil || upgradeErr != nil) → show combined results
 //  4. Otherwise → show confirmation screen
 func RenderUpgradeSync(results []update.UpdateResult, upgradeReport *upgrade.UpgradeReport, syncFilesChanged int, upgradeErr error, syncErr error, operationRunning bool, updateCheckDone bool, cursor int, spinnerFrame int) string {
 	var b strings.Builder
 
-	b.WriteString(styles.TitleStyle.Render("Upgrade + Sync"))
+	b.WriteString(styles.TitleStyle.Render("Update + Sync"))
 	b.WriteString("\n\n")
 
-	// State 1: upgrade is running (report not yet available)
+	// State 1: update is running (report not yet available)
 	if operationRunning && upgradeReport == nil && upgradeErr == nil {
-		if !updateCheckDone {
-			b.WriteString(styles.WarningStyle.Render(SpinnerChar(spinnerFrame) + "  Checking for updates..."))
-		} else {
-			b.WriteString(styles.WarningStyle.Render(SpinnerChar(spinnerFrame) + "  Upgrading tools..."))
-		}
+		b.WriteString(styles.WarningStyle.Render(SpinnerChar(spinnerFrame) + "  Updating repositories..."))
 		b.WriteString("\n\n")
 		b.WriteString(styles.HelpStyle.Render("Please wait..."))
 		return b.String()
 	}
 
-	// State 2: upgrade done, sync now running
+	// State 2: update done, sync now running
 	if operationRunning && (upgradeReport != nil || upgradeErr != nil) {
 		if upgradeErr != nil {
-			b.WriteString(styles.ErrorStyle.Render("✗ Upgrade failed"))
+			b.WriteString(styles.ErrorStyle.Render("✗ Update failed"))
 		} else {
-			b.WriteString(styles.SuccessStyle.Render("✓ Upgrade complete"))
+			b.WriteString(styles.SuccessStyle.Render("✓ Update complete"))
 		}
 		b.WriteString("\n\n")
 		b.WriteString(styles.WarningStyle.Render(SpinnerChar(spinnerFrame) + "  Syncing configurations..."))
@@ -56,49 +52,25 @@ func RenderUpgradeSync(results []update.UpdateResult, upgradeReport *upgrade.Upg
 	}
 
 	// State 4: confirmation screen
-	b.WriteString(renderUpgradeSyncConfirm(results, updateCheckDone, spinnerFrame))
+	b.WriteString(renderUpgradeSyncConfirm())
 	return b.String()
 }
 
-func renderUpgradeSyncConfirm(results []update.UpdateResult, updateCheckDone bool, spinnerFrame int) string {
+func renderUpgradeSyncConfirm() string {
 	var b strings.Builder
-
-	if !updateCheckDone {
-		b.WriteString(styles.WarningStyle.Render(SpinnerChar(spinnerFrame) + "  Checking for updates..."))
-		b.WriteString("\n\n")
-		b.WriteString(styles.HelpStyle.Render("Waiting for version check to complete..."))
-		return b.String()
-	}
 
 	b.WriteString(styles.UnselectedStyle.Render("This will perform two operations in sequence:"))
 	b.WriteString("\n\n")
 
-	b.WriteString("  " + styles.WarningStyle.Render("1.") + " " + styles.HeadingStyle.Render("Upgrade tools"))
+	b.WriteString("  " + styles.WarningStyle.Render("1.") + " " + styles.HeadingStyle.Render("Update repositories"))
 	b.WriteString("\n")
-	b.WriteString("     " + styles.SubtextStyle.Render("Updates informa-wizard, engram, and gga to latest versions"))
+	b.WriteString("     " + styles.SubtextStyle.Render("Pulls latest changes for informa-wizard, dev-skills, and dev-agents"))
 	b.WriteString("\n\n")
 
 	b.WriteString("  " + styles.WarningStyle.Render("2.") + " " + styles.HeadingStyle.Render("Sync configurations"))
 	b.WriteString("\n")
 	b.WriteString("     " + styles.SubtextStyle.Render("Re-applies dotfile configs to all detected agents"))
 	b.WriteString("\n\n")
-
-	// Show tool update summary if available
-	if len(results) > 0 {
-		hasUpdates := false
-		for _, r := range results {
-			if r.Status == update.UpdateAvailable {
-				hasUpdates = true
-				break
-			}
-		}
-		if hasUpdates {
-			b.WriteString(styles.WarningStyle.Render("Updates available — tools will be upgraded"))
-		} else {
-			b.WriteString(styles.SubtextStyle.Render("All tools are already up to date (sync will still run)"))
-		}
-		b.WriteString("\n\n")
-	}
 
 	b.WriteString(styles.HeadingStyle.Render("Press enter to begin"))
 	b.WriteString("\n\n")
@@ -110,12 +82,12 @@ func renderUpgradeSyncConfirm(results []update.UpdateResult, updateCheckDone boo
 func renderUpgradeSyncResult(report *upgrade.UpgradeReport, syncFilesChanged int, upgradeErr error, syncErr error) string {
 	var b strings.Builder
 
-	// --- Upgrade section ---
-	b.WriteString(styles.HeadingStyle.Render("Upgrade Results"))
+	// --- Update section ---
+	b.WriteString(styles.HeadingStyle.Render("Update Results"))
 	b.WriteString("\n\n")
 
 	if upgradeErr != nil {
-		b.WriteString(styles.ErrorStyle.Render("✗ Upgrade failed: " + upgradeErr.Error()))
+		b.WriteString(styles.ErrorStyle.Render("✗ Update failed: " + upgradeErr.Error()))
 		b.WriteString("\n")
 	} else if report != nil {
 		upgradeSucceeded, upgradeFailed, upgradeSkipped := 0, 0, 0
