@@ -359,6 +359,7 @@ func NewModel(detection system.DetectionResult, version string) Model {
 		Persona:    model.PersonaCustom,
 		Preset:     model.PresetFull,
 		Components: componentsForPreset(model.PresetFull),
+		SDDMode:    model.SDDModeMulti,
 	}
 
 	return Model{
@@ -935,8 +936,11 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			m = m.withResetOperationState()
 			m.setScreen(ScreenUpgradeSync)
 		case 3:
-			m.setScreen(ScreenModelConfig)
+			// "Configure Monday"
+			m.setScreen(ScreenMonday)
 		case 4:
+			m.setScreen(ScreenModelConfig)
+		case 5:
 			// "Create your own Agent" — blocked when no engines are available.
 			if !m.hasAgentBuilderEngines() {
 				return m, nil
@@ -950,7 +954,7 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			ta.SetHeight(5)
 			m.AgentBuilder.Textarea = ta
 			m.setScreen(ScreenAgentBuilderEngine)
-		case 5:
+		case 6:
 			if m.hasDetectedOpenCode() {
 				// "OpenCode SDD Profiles" (only shown when OpenCode is detected)
 				m.setScreen(ScreenProfiles)
@@ -958,7 +962,7 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 				// "Manage backups"
 				m.setScreen(ScreenBackups)
 			}
-		case 6:
+		case 7:
 			if m.hasDetectedOpenCode() {
 				// "Manage backups"
 				m.setScreen(ScreenBackups)
@@ -966,7 +970,7 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 				// "Quit"
 				return m, tea.Quit
 			}
-		case 7:
+		case 8:
 			// "Quit" (only reachable when showProfiles is true, so OpenCode is detected)
 			return m, tea.Quit
 		}
@@ -1457,11 +1461,11 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 		m.goToMondayOrReview()
 		return m, nil
 	case ScreenMonday:
-		// Enter on Monday screen: save inputs and proceed to Review.
+		// Enter on Monday screen: save inputs and return to welcome menu.
+		// Monday is configured from the welcome menu, not the install flow.
 		m.Selection.Monday.Token = m.MondayTokenInput
 		m.Selection.Monday.BoardID = m.MondayBoardInput
-		m.Review = planner.BuildReviewPayload(m.Selection, m.DependencyPlan)
-		m.setScreen(ScreenReview)
+		m.setScreen(ScreenWelcome)
 		return m, nil
 	case ScreenReview:
 		if m.Cursor == 0 {
@@ -1991,45 +1995,21 @@ func (m Model) goBack() Model {
 		return m
 	}
 
-	// Going back from Review: if Monday screen was shown, go there first.
-	// Then check DevAgentPicker, then DevSkillPicker.
-	if m.Screen == ScreenReview && m.shouldShowMondayScreen() {
-		m.setScreen(ScreenMonday)
-		return m
-	}
-
-	// Going back from Review: if DevAgentPicker was shown (and Monday was not), go there.
+	// Going back from Review: if DevAgentPicker was shown, go there.
 	if m.Screen == ScreenReview && m.shouldShowDevAgentPickerScreen() {
 		m.setScreen(ScreenDevAgentPicker)
 		return m
 	}
 
-	// Going back from Review: if DevSkillPicker was shown (and Monday and DevAgentPicker were not), go there.
+	// Going back from Review: if DevSkillPicker was shown (and DevAgentPicker was not), go there.
 	if m.Screen == ScreenReview && m.shouldShowDevSkillPickerScreen() {
 		m.setScreen(ScreenDevSkillPicker)
 		return m
 	}
 
-	// Going back from Monday: if DevAgentPicker was shown, go there.
-	// Then DevSkillPicker, otherwise return to DependencyTree (or SkillPicker in custom).
+	// Going back from Monday (accessed from welcome menu): return to welcome.
 	if m.Screen == ScreenMonday {
-		if m.shouldShowDevAgentPickerScreen() {
-			m.setScreen(ScreenDevAgentPicker)
-			return m
-		}
-		if m.shouldShowDevSkillPickerScreen() {
-			m.setScreen(ScreenDevSkillPicker)
-			return m
-		}
-		if m.Selection.Preset == model.PresetCustom {
-			if m.shouldShowSkillPickerScreen() {
-				m.setScreen(ScreenSkillPicker)
-			} else {
-				m.setScreen(ScreenDependencyTree)
-			}
-		} else {
-			m.setScreen(ScreenDependencyTree)
-		}
+		m.setScreen(ScreenWelcome)
 		return m
 	}
 
@@ -2168,14 +2148,14 @@ func (m Model) handleRenameInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyEnter:
-		// Save inputs and proceed to Review.
+		// Save inputs and return to welcome menu.
+		// Monday is configured from the welcome menu, not the install flow.
 		m.Selection.Monday.Token = m.MondayTokenInput
 		m.Selection.Monday.BoardID = m.MondayBoardInput
-		m.Review = planner.BuildReviewPayload(m.Selection, m.DependencyPlan)
-		m.setScreen(ScreenReview)
+		m.setScreen(ScreenWelcome)
 		return m, nil
 	case tea.KeyEsc:
-		m.setScreen(ScreenDependencyTree)
+		m.setScreen(ScreenWelcome)
 		return m, nil
 	case tea.KeyTab:
 		// Switch between token and board ID fields.
@@ -2592,9 +2572,10 @@ func (m Model) hasDetectedOpenCode() bool {
 	return false
 }
 
+// shouldShowSDDModeScreen always returns false — the SDD Mode selection screen
+// has been removed from the install flow. Multi-agent mode is the default.
 func (m Model) shouldShowSDDModeScreen() bool {
-	return m.Selection.HasAgent(model.AgentOpenCode) &&
-		hasSelectedComponent(m.Selection.Components, model.ComponentSDD)
+	return false
 }
 
 // shouldShowStrictTDDScreen reports whether the Strict TDD Mode screen should
@@ -2621,8 +2602,9 @@ func (m Model) shouldShowDevAgentPickerScreen() bool {
 // goToReviewOrMonday navigates to the DevSkillPicker screen (when the DevSkills
 // component is selected and we're not already on that screen), then to the
 // DevAgentPicker screen (when the DevAgents component is selected and we're not
-// already on that screen), then to the Monday config screen if needed, otherwise
-// directly to Review.
+// already on that screen), then directly to Review.
+// Note: Monday configuration has been moved to the welcome menu and is no longer
+// part of the install flow.
 func (m *Model) goToReviewOrMonday() {
 	if m.shouldShowDevSkillPickerScreen() && m.Screen != ScreenDevSkillPicker {
 		m.initDevSkillPicker()
@@ -2634,21 +2616,15 @@ func (m *Model) goToReviewOrMonday() {
 		m.setScreen(ScreenDevAgentPicker)
 		return
 	}
-	if m.shouldShowMondayScreen() && m.MondayTokenInput == "" {
-		m.setScreen(ScreenMonday)
-		return
-	}
 	m.Review = planner.BuildReviewPayload(m.Selection, m.DependencyPlan)
 	m.setScreen(ScreenReview)
 }
 
-// goToMondayOrReview navigates to the Monday config screen (if needed) or
-// directly to Review. Called after the DevAgentPicker is confirmed.
+// goToMondayOrReview navigates directly to Review.
+// Called after the DevAgentPicker is confirmed.
+// Note: Monday configuration has been moved to the welcome menu and is no longer
+// part of the install flow.
 func (m *Model) goToMondayOrReview() {
-	if m.shouldShowMondayScreen() && m.MondayTokenInput == "" {
-		m.setScreen(ScreenMonday)
-		return
-	}
 	m.Review = planner.BuildReviewPayload(m.Selection, m.DependencyPlan)
 	m.setScreen(ScreenReview)
 }

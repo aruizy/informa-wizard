@@ -24,6 +24,7 @@ func WelcomeOptions(showProfiles bool, profileCount int, hasEngines bool) []stri
 		"Start installation",
 		"Sync configs",
 		"Update + Sync",
+		"Configure Monday",
 		"Configure models",
 		agentLabel,
 	}

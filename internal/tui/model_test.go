@@ -292,48 +292,29 @@ func TestBackupRestoreMsgHandledGracefully(t *testing.T) {
 	}
 }
 
+// TestShouldShowSDDModeScreen verifies that shouldShowSDDModeScreen always returns
+// false — the SDD Mode selection screen has been removed from the install flow.
+// Multi-agent mode is now the permanent default.
 func TestShouldShowSDDModeScreen(t *testing.T) {
 	tests := []struct {
 		name       string
 		agents     []model.AgentID
 		components []model.ComponentID
-		want       bool
 	}{
 		{
-			name:       "OpenCode + SDD = true",
+			name:       "OpenCode + SDD",
 			agents:     []model.AgentID{model.AgentOpenCode},
 			components: []model.ComponentID{model.ComponentEngram, model.ComponentSDD},
-			want:       true,
 		},
 		{
-			name:       "Claude only + SDD = false",
+			name:       "Claude only + SDD",
 			agents:     []model.AgentID{model.AgentClaudeCode},
 			components: []model.ComponentID{model.ComponentEngram, model.ComponentSDD},
-			want:       false,
 		},
 		{
-			name:       "OpenCode + no SDD = false",
-			agents:     []model.AgentID{model.AgentOpenCode},
-			components: []model.ComponentID{model.ComponentEngram},
-			want:       false,
-		},
-		{
-			name:       "multiple agents including OpenCode + SDD = true",
+			name:       "multiple agents including OpenCode + SDD",
 			agents:     []model.AgentID{model.AgentClaudeCode, model.AgentOpenCode},
 			components: []model.ComponentID{model.ComponentSDD, model.ComponentEngram},
-			want:       true,
-		},
-		{
-			name:       "no agents + SDD = false",
-			agents:     []model.AgentID{},
-			components: []model.ComponentID{model.ComponentSDD},
-			want:       false,
-		},
-		{
-			name:       "OpenCode + empty components = false",
-			agents:     []model.AgentID{model.AgentOpenCode},
-			components: []model.ComponentID{},
-			want:       false,
 		},
 	}
 
@@ -343,9 +324,8 @@ func TestShouldShowSDDModeScreen(t *testing.T) {
 			m.Selection.Agents = tt.agents
 			m.Selection.Components = tt.components
 
-			got := m.shouldShowSDDModeScreen()
-			if got != tt.want {
-				t.Fatalf("shouldShowSDDModeScreen() = %v, want %v", got, tt.want)
+			if got := m.shouldShowSDDModeScreen(); got {
+				t.Fatalf("shouldShowSDDModeScreen() = true, want false (SDD Mode screen removed from flow)")
 			}
 		})
 	}
@@ -434,25 +414,12 @@ func TestClaudeModelPickerBalancedSelectionStoresAssignments(t *testing.T) {
 	}
 }
 
-// ─── SDDMode → ModelPicker / DependencyTree transition (issue #106 Bug 2) ──
+// ─── Preset → StrictTDD transition (SDDMode screen removed) ──────────────────
 
-// sddMultiCursor returns the cursor index for SDDModeMulti in SDDModeOptions.
-func sddMultiCursor(t *testing.T) int {
-	t.Helper()
-	for i, opt := range screens.SDDModeOptions() {
-		if opt == model.SDDModeMulti {
-			return i
-		}
-	}
-	t.Fatal("SDDModeMulti not found in SDDModeOptions()")
-	return -1
-}
-
-// TestSDDModeMultiSkipModelPickerWhenCacheMissing verifies that when SDDModeMulti
-// is selected and the OpenCode model cache does NOT exist on disk, the TUI skips
-// the model picker and goes to ScreenStrictTDD (the new next step after SDDMode).
-// This is the "fresh install" path where OpenCode has not been run yet.
-func TestSDDModeMultiSkipModelPickerWhenCacheMissing(t *testing.T) {
+// TestPresetOpenCodeSDDGoesToStrictTDDWhenCacheMissing verifies that when OpenCode
+// + SDD is selected and the model cache does NOT exist, the TUI navigates from
+// ScreenPreset directly to ScreenStrictTDD (the SDD Mode screen has been removed).
+func TestPresetOpenCodeSDDGoesToStrictTDDWhenCacheMissing(t *testing.T) {
 	origStat := osStatModelCache
 	osStatModelCache = func(name string) (os.FileInfo, error) {
 		return nil, os.ErrNotExist
@@ -460,27 +427,25 @@ func TestSDDModeMultiSkipModelPickerWhenCacheMissing(t *testing.T) {
 	t.Cleanup(func() { osStatModelCache = origStat })
 
 	m := NewModel(system.DetectionResult{}, "dev")
-	m.Screen = ScreenSDDMode
+	m.Screen = ScreenPreset
 	m.Selection.Agents = []model.AgentID{model.AgentOpenCode}
-	m.Selection.Components = []model.ComponentID{model.ComponentEngram, model.ComponentSDD}
-	m.Cursor = sddMultiCursor(t)
+	// Cursor 0 = PresetFull (includes SDD component).
+	m.Cursor = 0
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	state := updated.(Model)
 
-	// New flow: SDDMode → ScreenStrictTDD (cache missing → skip model picker, then ask strict TDD)
+	// Preset → StrictTDD (cache missing → skip model picker, no SDDMode screen)
 	if state.Screen != ScreenStrictTDD {
-		t.Fatalf("screen = %v, want ScreenStrictTDD (cache missing → skip model picker, show strict TDD)", state.Screen)
-	}
-	if len(state.ModelPicker.AvailableIDs) != 0 {
-		t.Fatalf("ModelPicker.AvailableIDs should be empty when cache missing, got: %v", state.ModelPicker.AvailableIDs)
+		t.Fatalf("screen = %v, want ScreenStrictTDD (Preset → StrictTDD when OpenCode + SDD, cache missing)", state.Screen)
 	}
 }
 
-// TestSDDModeMultiShowsModelPickerWhenCacheExists verifies that when SDDModeMulti
-// is selected and the OpenCode model cache EXISTS on disk, the TUI transitions to
-// ScreenModelPicker so the user can assign models to SDD phases.
-func TestSDDModeMultiShowsModelPickerWhenCacheExists(t *testing.T) {
+// TestPresetOpenCodeSDDGoesToModelPickerWhenCacheExists verifies that when OpenCode
+// + SDD is selected and the model cache EXISTS, the TUI transitions from ScreenPreset
+// to ScreenStrictTDD (model picker is shown only from SDDMode, which is now removed).
+// The ModelPicker is reached from ScreenStrictTDD or ModelConfig paths, not Preset.
+func TestPresetOpenCodeSDDGoesToStrictTDDWhenCacheExists(t *testing.T) {
 	// Write a minimal valid models.json so NewModelPickerState can parse it.
 	tmpDir := t.TempDir()
 	cacheFile := tmpDir + "/models.json"
@@ -495,16 +460,17 @@ func TestSDDModeMultiShowsModelPickerWhenCacheExists(t *testing.T) {
 	t.Cleanup(func() { osStatModelCache = origStat })
 
 	m := NewModel(system.DetectionResult{}, "dev")
-	m.Screen = ScreenSDDMode
+	m.Screen = ScreenPreset
 	m.Selection.Agents = []model.AgentID{model.AgentOpenCode}
-	m.Selection.Components = []model.ComponentID{model.ComponentEngram, model.ComponentSDD}
-	m.Cursor = sddMultiCursor(t)
+	// Cursor 0 = PresetFull (includes SDD component).
+	m.Cursor = 0
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	state := updated.(Model)
 
-	if state.Screen != ScreenModelPicker {
-		t.Fatalf("screen = %v, want ScreenModelPicker (cache present → show picker)", state.Screen)
+	// Preset → StrictTDD (SDDMode screen removed; ModelPicker is only reached via SDDMode legacy path)
+	if state.Screen != ScreenStrictTDD {
+		t.Fatalf("screen = %v, want ScreenStrictTDD (Preset → StrictTDD when OpenCode + SDD)", state.Screen)
 	}
 }
 
@@ -795,8 +761,8 @@ func TestWelcomeMenu_UpgradeSyncNavigation(t *testing.T) {
 	}
 }
 
-// TestWelcomeMenu_ConfigureModelsNavigation verifies cursor 3 goes to ScreenModelConfig.
-func TestWelcomeMenu_ConfigureModelsNavigation(t *testing.T) {
+// TestWelcomeMenu_ConfigureMondayNavigation verifies cursor 3 goes to ScreenMonday.
+func TestWelcomeMenu_ConfigureMondayNavigation(t *testing.T) {
 	m := NewModel(system.DetectionResult{}, "dev")
 	m.Screen = ScreenWelcome
 	m.Cursor = 3
@@ -804,38 +770,52 @@ func TestWelcomeMenu_ConfigureModelsNavigation(t *testing.T) {
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	state := updated.(Model)
 
-	if state.Screen != ScreenModelConfig {
-		t.Fatalf("cursor=3 (Configure Models): screen = %v, want %v", state.Screen, ScreenModelConfig)
+	if state.Screen != ScreenMonday {
+		t.Fatalf("cursor=3 (Configure Monday): screen = %v, want %v", state.Screen, ScreenMonday)
 	}
 }
 
-// TestWelcomeMenu_BackupsNavigation verifies cursor 5 (Manage backups) goes to ScreenBackups
+// TestWelcomeMenu_ConfigureModelsNavigation verifies cursor 4 goes to ScreenModelConfig.
+func TestWelcomeMenu_ConfigureModelsNavigation(t *testing.T) {
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenWelcome
+	m.Cursor = 4
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	state := updated.(Model)
+
+	if state.Screen != ScreenModelConfig {
+		t.Fatalf("cursor=4 (Configure Models): screen = %v, want %v", state.Screen, ScreenModelConfig)
+	}
+}
+
+// TestWelcomeMenu_BackupsNavigation verifies cursor 6 (Manage backups) goes to ScreenBackups
 // when OpenCode is not detected.
 func TestWelcomeMenu_BackupsNavigation(t *testing.T) {
 	m := NewModel(system.DetectionResult{}, "dev")
 	m.Screen = ScreenWelcome
-	m.Cursor = 5
+	m.Cursor = 6
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	state := updated.(Model)
 
 	if state.Screen != ScreenBackups {
-		t.Fatalf("cursor=5 (Backups): screen = %v, want %v", state.Screen, ScreenBackups)
+		t.Fatalf("cursor=6 (Backups): screen = %v, want %v", state.Screen, ScreenBackups)
 	}
 }
 
 // TestWelcomeMenu_OptionCount verifies the welcome menu has 8 items without OpenCode
 // and 9 items when OpenCode is detected (adds "OpenCode SDD Profiles" option).
 func TestWelcomeMenu_OptionCount(t *testing.T) {
-	// Without OpenCode detected: 7 options (no "Upgrade tools").
+	// Without OpenCode detected: 8 options (includes "Configure Monday").
 	opts := screens.WelcomeOptions(false, 0, true)
-	if len(opts) != 7 {
-		t.Fatalf("WelcomeOptions(showProfiles=false) len = %d, want 7; got %v", len(opts), opts)
+	if len(opts) != 8 {
+		t.Fatalf("WelcomeOptions(showProfiles=false) len = %d, want 8; got %v", len(opts), opts)
 	}
-	// With OpenCode detected: 8 options (adds "OpenCode SDD Profiles").
+	// With OpenCode detected: 9 options (adds "OpenCode SDD Profiles").
 	optsWithProfiles := screens.WelcomeOptions(true, 0, true)
-	if len(optsWithProfiles) != 8 {
-		t.Fatalf("WelcomeOptions(showProfiles=true) len = %d, want 8; got %v", len(optsWithProfiles), optsWithProfiles)
+	if len(optsWithProfiles) != 9 {
+		t.Fatalf("WelcomeOptions(showProfiles=true) len = %d, want 9; got %v", len(optsWithProfiles), optsWithProfiles)
 	}
 }
 
@@ -1652,22 +1632,10 @@ func TestPreselectedAgents_AllSixAgentsMappedCorrectly(t *testing.T) {
 
 // ─── Task 4: StrictTDD screen navigation ────────────────────────────────────
 
-// helper: returns cursor index for SDDModeSingle in SDDModeOptions.
-func sddSingleCursor(t *testing.T) int {
-	t.Helper()
-	for i, opt := range screens.SDDModeOptions() {
-		if opt == model.SDDModeSingle {
-			return i
-		}
-	}
-	t.Fatal("SDDModeSingle not found in SDDModeOptions()")
-	return -1
-}
-
-// TestStrictTDDScreenAppearsAfterSDDMode verifies that from ScreenSDDMode,
-// selecting single mode navigates to ScreenStrictTDD (not ScreenDependencyTree)
-// when the SDD component and OpenCode agent are selected.
-func TestStrictTDDScreenAppearsAfterSDDMode(t *testing.T) {
+// TestStrictTDDScreenAppearsAfterPreset verifies that from ScreenPreset,
+// selecting a preset with OpenCode + SDD navigates directly to ScreenStrictTDD
+// (the SDD Mode selection screen has been removed from the install flow).
+func TestStrictTDDScreenAppearsAfterPreset(t *testing.T) {
 	origStat := osStatModelCache
 	osStatModelCache = func(name string) (os.FileInfo, error) {
 		return nil, os.ErrNotExist
@@ -1675,16 +1643,16 @@ func TestStrictTDDScreenAppearsAfterSDDMode(t *testing.T) {
 	t.Cleanup(func() { osStatModelCache = origStat })
 
 	m := NewModel(system.DetectionResult{}, "dev")
-	m.Screen = ScreenSDDMode
+	m.Screen = ScreenPreset
 	m.Selection.Agents = []model.AgentID{model.AgentOpenCode}
-	m.Selection.Components = []model.ComponentID{model.ComponentEngram, model.ComponentSDD}
-	m.Cursor = sddSingleCursor(t)
+	// Cursor 0 = PresetFull (includes SDD component).
+	m.Cursor = 0
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	state := updated.(Model)
 
 	if state.Screen != ScreenStrictTDD {
-		t.Fatalf("screen = %v, want ScreenStrictTDD (after SDDMode single selection)", state.Screen)
+		t.Fatalf("screen = %v, want ScreenStrictTDD (Preset → StrictTDD with OpenCode + SDD)", state.Screen)
 	}
 }
 
@@ -1736,20 +1704,17 @@ func TestStrictTDDScreenDisableSetsSelection(t *testing.T) {
 }
 
 // TestStrictTDDScreenSkippedWhenNoSDD verifies that when the SDD component is
-// NOT selected, the ScreenStrictTDD is not used in the navigation path.
-// From ScreenSDDMode with single selection → should go directly to
-// ScreenDependencyTree when SDD is not in components.
-//
-// NOTE: shouldShowSDDModeScreen() requires ComponentSDD, so in practice the
-// SDDMode screen itself would not show when there is no SDD. This test
-// validates that ScreenStrictTDD is never reached without SDD.
+// NOT selected, ScreenStrictTDD is not shown in the navigation path.
+// We simulate this by manually setting components without SDD and pressing Back
+// on ScreenDependencyTree — should NOT route through StrictTDD.
 func TestStrictTDDScreenSkippedWhenNoSDD(t *testing.T) {
 	m := NewModel(system.DetectionResult{}, "dev")
-	m.Screen = ScreenSDDMode
+	m.Screen = ScreenDependencyTree
+	m.Selection.Preset = model.PresetFull
 	m.Selection.Agents = []model.AgentID{model.AgentOpenCode}
-	// No ComponentSDD in components.
+	// No SDD component in selection.
 	m.Selection.Components = []model.ComponentID{model.ComponentEngram}
-	m.Cursor = sddSingleCursor(t)
+	m.Cursor = 1 // "Back" cursor position in DependencyTree
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	state := updated.(Model)
@@ -1759,9 +1724,10 @@ func TestStrictTDDScreenSkippedWhenNoSDD(t *testing.T) {
 	}
 }
 
-// TestStrictTDDBackNavigatesToSDDMode verifies that pressing Escape on
-// ScreenStrictTDD returns to ScreenSDDMode.
-func TestStrictTDDBackNavigatesToSDDMode(t *testing.T) {
+// TestStrictTDDBackNavigatesToPreset verifies that pressing Escape on
+// ScreenStrictTDD returns to ScreenPreset (the SDD Mode selection screen has been
+// removed, so the previous step in the OpenCode non-custom flow is ScreenPreset).
+func TestStrictTDDBackNavigatesToPreset(t *testing.T) {
 	m := NewModel(system.DetectionResult{}, "dev")
 	m.Screen = ScreenStrictTDD
 	m.Selection.Agents = []model.AgentID{model.AgentOpenCode}
@@ -1770,8 +1736,8 @@ func TestStrictTDDBackNavigatesToSDDMode(t *testing.T) {
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	state := updated.(Model)
 
-	if state.Screen != ScreenSDDMode {
-		t.Fatalf("screen = %v, want ScreenSDDMode after pressing Esc on ScreenStrictTDD", state.Screen)
+	if state.Screen != ScreenPreset {
+		t.Fatalf("screen = %v, want ScreenPreset after pressing Esc on ScreenStrictTDD (SDDMode screen removed)", state.Screen)
 	}
 }
 
@@ -1779,15 +1745,14 @@ func TestStrictTDDBackNavigatesToSDDMode(t *testing.T) {
 
 // TestDependencyTreeEnterBackNavigatesToStrictTDD verifies that pressing Enter
 // on the "Back" option (cursor == 1) of a non-custom DependencyTree screen goes
-// to ScreenStrictTDD when shouldShowSDDModeScreen() is true (OpenCode + SDD).
-// Previously, Enter-Back went directly to ScreenSDDMode, skipping StrictTDD.
+// to ScreenStrictTDD when shouldShowStrictTDDScreen() is true (SDD component selected).
 func TestDependencyTreeEnterBackNavigatesToStrictTDD(t *testing.T) {
 	m := NewModel(system.DetectionResult{}, "dev")
 	m.Screen = ScreenDependencyTree
 	m.Selection.Preset = model.PresetFull // non-custom
 	m.Selection.Agents = []model.AgentID{model.AgentOpenCode}
 	m.Selection.Components = []model.ComponentID{model.ComponentEngram, model.ComponentSDD}
-	m.Selection.SDDMode = model.SDDModeSingle
+	m.Selection.SDDMode = model.SDDModeMulti // default multi mode
 	// cursor == 1 → the "Back" option in DependencyTreeOptions() = ["Continue", "Back"]
 	m.Cursor = 1
 
@@ -1795,7 +1760,7 @@ func TestDependencyTreeEnterBackNavigatesToStrictTDD(t *testing.T) {
 	state := updated.(Model)
 
 	if state.Screen != ScreenStrictTDD {
-		t.Fatalf("screen = %v, want ScreenStrictTDD after Enter on DependencyTree Back (shouldShowSDDModeScreen=true)", state.Screen)
+		t.Fatalf("screen = %v, want ScreenStrictTDD after Enter on DependencyTree Back (shouldShowStrictTDDScreen=true)", state.Screen)
 	}
 }
 
@@ -1852,7 +1817,10 @@ func TestModelPickerContinueMultiGoesToStrictTDD(t *testing.T) {
 // TestStrictTDDBackNavigatesToModelPickerWhenMultiWithCache verifies that
 // pressing Escape on ScreenStrictTDD when SDDModeMulti is active and the
 // OpenCode model cache exists returns to ScreenModelPicker.
-func TestStrictTDDBackNavigatesToModelPickerWhenMultiWithCache(t *testing.T) {
+// TestStrictTDDBackNavigatesToPresetRegardlessOfCache verifies that pressing Esc on
+// ScreenStrictTDD for OpenCode (non-custom preset) always returns to ScreenPreset —
+// the SDD Mode screen has been removed so the ModelPicker path via SDDMode is gone.
+func TestStrictTDDBackNavigatesToPresetRegardlessOfCache(t *testing.T) {
 	tmpDir := t.TempDir()
 	cacheFile := tmpDir + "/models.json"
 	if err := os.WriteFile(cacheFile, []byte(`{}`), 0o644); err != nil {
@@ -1874,8 +1842,9 @@ func TestStrictTDDBackNavigatesToModelPickerWhenMultiWithCache(t *testing.T) {
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	state := updated.(Model)
 
-	if state.Screen != ScreenModelPicker {
-		t.Fatalf("screen = %v, want ScreenModelPicker after Esc on ScreenStrictTDD (SDDModeMulti + cache exists)", state.Screen)
+	// SDDMode screen removed: Back from StrictTDD (OpenCode, non-custom) now goes to ScreenPreset.
+	if state.Screen != ScreenPreset {
+		t.Fatalf("screen = %v, want ScreenPreset after Esc on ScreenStrictTDD (SDDMode removed)", state.Screen)
 	}
 }
 
@@ -2156,11 +2125,11 @@ func TestCustomPresetStrictTDDBackGoesToDependencyTree(t *testing.T) {
 	}
 }
 
-// TestCustomPresetStrictTDDBackGoesToSDDMode verifies that in the custom preset,
-// pressing ESC on ScreenStrictTDD when SDDMode was shown (OpenCode + SDD) goes
-// back to ScreenSDDMode.
-// RED: currently fails because goBack() from ScreenStrictTDD has no custom-preset handling.
-func TestCustomPresetStrictTDDBackGoesToSDDMode(t *testing.T) {
+// TestCustomPresetStrictTDDBackGoesToDependencyTreeOpenCode verifies that in the custom
+// preset, pressing ESC on ScreenStrictTDD when OpenCode + SDD is selected goes back to
+// ScreenDependencyTree (the component selector). The SDD Mode selection screen has
+// been removed, so DependencyTree is now the preceding step in the custom preset flow.
+func TestCustomPresetStrictTDDBackGoesToDependencyTreeOpenCode(t *testing.T) {
 	m := NewModel(system.DetectionResult{}, "dev")
 	m.Screen = ScreenStrictTDD
 	m.Selection.Preset = model.PresetCustom
@@ -2170,8 +2139,8 @@ func TestCustomPresetStrictTDDBackGoesToSDDMode(t *testing.T) {
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	state := updated.(Model)
 
-	if state.Screen != ScreenSDDMode {
-		t.Fatalf("screen = %v, want ScreenSDDMode after Esc on ScreenStrictTDD (custom preset, OpenCode + SDD)", state.Screen)
+	if state.Screen != ScreenDependencyTree {
+		t.Fatalf("screen = %v, want ScreenDependencyTree after Esc on ScreenStrictTDD (custom preset, OpenCode + SDD, SDDMode removed)", state.Screen)
 	}
 }
 
@@ -2738,12 +2707,12 @@ func TestPinErrClearedOnScreenReentry(t *testing.T) {
 		t.Fatalf("Esc from ScreenBackups: screen = %v, want ScreenWelcome", afterEsc.Screen)
 	}
 
-	// Navigate back to ScreenBackups (cursor 5 on Welcome → enter, no OpenCode detected).
-	afterEsc.Cursor = 5
+	// Navigate back to ScreenBackups (cursor 6 on Welcome → enter, no OpenCode detected).
+	afterEsc.Cursor = 6
 	updated2, _ := afterEsc.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	afterReturn := updated2.(Model)
 	if afterReturn.Screen != ScreenBackups {
-		t.Fatalf("Enter cursor=5 from ScreenWelcome: screen = %v, want ScreenBackups", afterReturn.Screen)
+		t.Fatalf("Enter cursor=6 from ScreenWelcome: screen = %v, want ScreenBackups", afterReturn.Screen)
 	}
 
 	// PinErr must be cleared on re-entry.
