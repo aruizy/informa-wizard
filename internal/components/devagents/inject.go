@@ -41,7 +41,10 @@ type subAgentInjector interface {
 // Adapters that do not implement the subAgentInjector interface are silently
 // skipped. If an agent's main .md is not found in the repo, a warning is
 // logged and the agent is skipped (no error).
-func InjectAgents(homeDir string, adapter agents.Adapter, agentIDs []string) (InjectionResult, error) {
+// InjectAgents copies agent files to the adapter's sub-agents directory.
+// defaultModel controls the "model:" field in Claude Code frontmatter
+// (e.g., "opus", "sonnet"). Pass "" to default to "sonnet".
+func InjectAgents(homeDir string, adapter agents.Adapter, agentIDs []string, defaultModel string) (InjectionResult, error) {
 	// OpenCode uses JSON config, not agent files.
 	if adapter.Agent() == model.AgentOpenCode {
 		return injectOpenCodeAgents(homeDir, adapter, agentIDs)
@@ -90,7 +93,7 @@ func InjectAgents(homeDir string, adapter agents.Adapter, agentIDs []string) (In
 
 		// Claude Code agents need YAML frontmatter for the agent system.
 		if adapter.Agent() == model.AgentClaudeCode {
-			content = ensureClaudeFrontmatter(content, agentID)
+			content = ensureClaudeFrontmatter(content, agentID, defaultModel)
 		}
 
 		destFilename := agentID + suffix
@@ -206,7 +209,7 @@ func agentFileSuffix(agentID model.AgentID) string {
 // ensureClaudeFrontmatter prepends Claude Code YAML frontmatter to the agent
 // content if it doesn't already have one. The frontmatter is required for
 // Claude Code's agent system (~/.claude/agents/).
-func ensureClaudeFrontmatter(content []byte, agentID string) []byte {
+func ensureClaudeFrontmatter(content []byte, agentID string, defaultModel string) []byte {
 	text := string(content)
 
 	// Already has frontmatter — don't add another.
@@ -231,10 +234,14 @@ func ensureClaudeFrontmatter(content []byte, agentID string) []byte {
 		break
 	}
 
+	if defaultModel == "" {
+		defaultModel = "sonnet"
+	}
+
 	frontmatter := "---\n" +
 		"name: " + agentID + "\n" +
 		"description: \"" + desc + "\"\n" +
-		"model: opus\n" +
+		"model: " + defaultModel + "\n" +
 		"memory: user\n" +
 		"---\n\n"
 

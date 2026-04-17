@@ -634,8 +634,13 @@ func (s componentApplyStep) Run() error {
 				}
 			}
 		}
+		// Resolve the default model for Claude Code agents from the model assignments.
+		agentModel := "sonnet"
+		if m, ok := s.selection.ClaudeModelAssignments["orchestrator"]; ok {
+			agentModel = string(m)
+		}
 		for _, adapter := range adapters {
-			if _, err := devagents.InjectAgents(s.homeDir, adapter, agentSelections); err != nil {
+			if _, err := devagents.InjectAgents(s.homeDir, adapter, agentSelections, agentModel); err != nil {
 				return fmt.Errorf("inject dev-agents for %q: %w", adapter.Agent(), err)
 			}
 		}
