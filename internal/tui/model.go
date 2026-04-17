@@ -1732,40 +1732,18 @@ func (m Model) startUpgradeSync() tea.Cmd {
 	syncFn := m.SyncFn
 
 	pullCmd := func() tea.Msg {
-		// Pull and rebuild informa-wizard if the source repo is available.
-		// Try GOPATH/src first, then common clone locations.
+		// Pull and rebuild informa-wizard from the persisted source directory.
 		home := homeDir()
-		wizardRepoCandidates := []string{}
-		if gopath := os.Getenv("GOPATH"); gopath != "" {
-			wizardRepoCandidates = append(wizardRepoCandidates,
-				filepath.Join(gopath, "src", "gitlab.informa.tools", "ai", "wizard", "informa-wizard"))
-		}
 		if home != "" {
-			wizardRepoCandidates = append(wizardRepoCandidates,
-				filepath.Join(home, "go", "src", "gitlab.informa.tools", "ai", "wizard", "informa-wizard"),
-				filepath.Join(home, "GIT", "informa-wizard"),
-				filepath.Join(home, "git", "informa-wizard"),
-			)
-		}
-		// Also try walking up from the executable location (covers `go run` from source).
-		if exe, err := os.Executable(); err == nil {
-			candidate := filepath.Dir(exe)
-			for i := 0; i < 5; i++ {
-				wizardRepoCandidates = append(wizardRepoCandidates, candidate)
-				parent := filepath.Dir(candidate)
-				if parent == candidate {
-					break
+			sourceDirFile := filepath.Join(home, ".informa-wizard", "source-dir")
+			if data, err := os.ReadFile(sourceDirFile); err == nil {
+				repoDir := strings.TrimSpace(string(data))
+				if _, err := os.Stat(filepath.Join(repoDir, ".git")); err == nil {
+					_ = devskills.Pull(repoDir)
+					goInstall := exec.Command("go", "install", "./cmd/informa-wizard")
+					goInstall.Dir = repoDir
+					_ = goInstall.Run()
 				}
-				candidate = parent
-			}
-		}
-		for _, repoDir := range wizardRepoCandidates {
-			if _, err := os.Stat(filepath.Join(repoDir, ".git")); err == nil {
-				_ = devskills.Pull(repoDir)
-				goInstall := exec.Command("go", "install", "./cmd/informa-wizard")
-				goInstall.Dir = repoDir
-				_ = goInstall.Run()
-				break
 			}
 		}
 

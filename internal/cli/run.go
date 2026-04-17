@@ -153,6 +153,15 @@ func RunInstall(args []string, detection system.DetectionResult) (InstallResult,
 	// Non-fatal: a state write failure must not break an otherwise successful install.
 	_ = state.Write(homeDir, agentIDs, componentIDs)
 
+	// Persist the source repo directory so Update+Sync can find it for git pull + go install.
+	if wd, wdErr := os.Getwd(); wdErr == nil {
+		if _, gitErr := os.Stat(filepath.Join(wd, ".git")); gitErr == nil {
+			sourceDirFile := filepath.Join(homeDir, ".informa-wizard", "source-dir")
+			_ = os.MkdirAll(filepath.Dir(sourceDirFile), 0o755)
+			_ = os.WriteFile(sourceDirFile, []byte(wd+"\n"), 0o644)
+		}
+	}
+
 	return result, nil
 }
 
