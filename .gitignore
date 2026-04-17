@@ -1,5 +1,5 @@
 # Binaries
-/gentle-ai
+/informa-wizard
 *.exe
 *.dll
 *.so
@@ -24,8 +24,11 @@ Thumbs.db
 
 # Docker
 *.tar
-cmd/gentle-ai/main
+cmd/informa-wizard/main
 dist/
 
 # Agent tooling metadata (generated per-user, not product code)
 .atl/
+
+# User config (may contain tokens)
+.informa-wizard/
