@@ -2628,25 +2628,47 @@ func mondayConfigPath() string {
 }
 
 func (m *Model) loadMondayConfig() {
+	// Try monday.json first.
 	path := mondayConfigPath()
-	if path == "" {
-		return
+	if path != "" {
+		if data, err := os.ReadFile(path); err == nil {
+			var cfg mondayJSON
+			if json.Unmarshal(data, &cfg) == nil {
+				if cfg.Token != "" && m.MondayTokenInput == "" {
+					m.MondayTokenInput = cfg.Token
+					m.MondayTokenPos = len([]rune(cfg.Token))
+				}
+				if cfg.BoardID != "" && m.MondayBoardInput == "" {
+					m.MondayBoardInput = cfg.BoardID
+					m.MondayBoardPos = len([]rune(cfg.BoardID))
+				}
+				if m.MondayTokenInput != "" {
+					return
+				}
+			}
+		}
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return
-	}
-	var cfg mondayJSON
-	if json.Unmarshal(data, &cfg) != nil {
-		return
-	}
+
+	// Fallback: read token from existing Claude Code MCP config.
 	if m.MondayTokenInput == "" {
-		m.MondayTokenInput = cfg.Token
-		m.MondayTokenPos = len([]rune(cfg.Token))
-	}
-	if m.MondayBoardInput == "" {
-		m.MondayBoardInput = cfg.BoardID
-		m.MondayBoardPos = len([]rune(cfg.BoardID))
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return
+		}
+		mcpPath := filepath.Join(home, ".claude", "mcp", "monday.json")
+		data, err := os.ReadFile(mcpPath)
+		if err != nil {
+			return
+		}
+		var mcpCfg struct {
+			Env map[string]string `json:"env"`
+		}
+		if json.Unmarshal(data, &mcpCfg) == nil {
+			if token := mcpCfg.Env["MONDAY_API_TOKEN"]; token != "" {
+				m.MondayTokenInput = token
+				m.MondayTokenPos = len([]rune(token))
+			}
+		}
 	}
 }
 
