@@ -47,8 +47,6 @@ func RenderWelcome(cursor int, version string, updateBanner string, showProfiles
 
 	b.WriteString(styles.RenderLogo())
 	b.WriteString("\n\n")
-	b.WriteString(styles.SubtextStyle.Render(styles.Tagline(version)))
-	b.WriteString("\n")
 
 	if commitDate != nil {
 		b.WriteString(styles.SubtextStyle.Render(fmt.Sprintf("Last update: %s", commitDate.Local().Format("2006-01-02 15:04"))))
