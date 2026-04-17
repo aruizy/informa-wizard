@@ -2464,29 +2464,20 @@ func (m *Model) buildDependencyPlan() {
 }
 
 func preselectedAgents(detection system.DetectionResult) []model.AgentID {
+	// Only detect agents that are in the active catalog.
+	catalogAgentSet := make(map[model.AgentID]bool)
+	for _, a := range catalog.AllAgents() {
+		catalogAgentSet[a.ID] = true
+	}
+
 	selected := []model.AgentID{}
 	for _, state := range detection.Configs {
 		if !state.Exists {
 			continue
 		}
-
-		switch strings.TrimSpace(state.Agent) {
-		case string(model.AgentClaudeCode):
-			selected = append(selected, model.AgentClaudeCode)
-		case string(model.AgentOpenCode):
-			selected = append(selected, model.AgentOpenCode)
-		case string(model.AgentGeminiCLI):
-			selected = append(selected, model.AgentGeminiCLI)
-		case string(model.AgentCursor):
-			selected = append(selected, model.AgentCursor)
-		case string(model.AgentVSCodeCopilot):
-			selected = append(selected, model.AgentVSCodeCopilot)
-		case string(model.AgentCodex):
-			selected = append(selected, model.AgentCodex)
-		case string(model.AgentAntigravity):
-			selected = append(selected, model.AgentAntigravity)
-		case string(model.AgentWindsurf):
-			selected = append(selected, model.AgentWindsurf)
+		agentID := model.AgentID(strings.TrimSpace(state.Agent))
+		if catalogAgentSet[agentID] {
+			selected = append(selected, agentID)
 		}
 	}
 

@@ -163,29 +163,19 @@ func componentsForPreset(preset model.PresetID) []model.ComponentID {
 }
 
 func defaultAgentsFromDetection(detection system.DetectionResult) []model.AgentID {
+	catalogAgentSet := make(map[model.AgentID]bool)
+	for _, a := range catalog.AllAgents() {
+		catalogAgentSet[a.ID] = true
+	}
+
 	agents := []model.AgentID{}
 	for _, state := range detection.Configs {
 		if !state.Exists {
 			continue
 		}
-
-		switch strings.TrimSpace(state.Agent) {
-		case string(model.AgentClaudeCode):
-			agents = append(agents, model.AgentClaudeCode)
-		case string(model.AgentOpenCode):
-			agents = append(agents, model.AgentOpenCode)
-		case string(model.AgentGeminiCLI):
-			agents = append(agents, model.AgentGeminiCLI)
-		case string(model.AgentCursor):
-			agents = append(agents, model.AgentCursor)
-		case string(model.AgentVSCodeCopilot):
-			agents = append(agents, model.AgentVSCodeCopilot)
-		case string(model.AgentCodex):
-			agents = append(agents, model.AgentCodex)
-		case string(model.AgentAntigravity):
-			agents = append(agents, model.AgentAntigravity)
-		case string(model.AgentWindsurf):
-			agents = append(agents, model.AgentWindsurf)
+		agentID := model.AgentID(strings.TrimSpace(state.Agent))
+		if catalogAgentSet[agentID] {
+			agents = append(agents, agentID)
 		}
 	}
 
