@@ -116,6 +116,18 @@ func (a *Adapter) MCPConfigPath(homeDir string, serverName string) string {
 
 // --- Optional capabilities ---
 
+func (a *Adapter) SupportsSubAgents() bool {
+	return true
+}
+
+func (a *Adapter) SubAgentsDir(homeDir string) string {
+	return filepath.Join(homeDir, ".claude", "agents")
+}
+
+func (a *Adapter) EmbeddedSubAgentsDir() string {
+	return "" // Claude Code has no embedded SDD sub-agents (uses Task tool delegation)
+}
+
 func (a *Adapter) SupportsOutputStyles() bool {
 	return true
 }

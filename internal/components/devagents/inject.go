@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/filemerge"
@@ -81,6 +82,11 @@ func InjectAgents(homeDir string, adapter agents.Adapter, agentIDs []string) (In
 			return InjectionResult{}, fmt.Errorf("dev-agent %s: read failed: %w", agentID, err)
 		}
 
+		// Claude Code agents need YAML frontmatter for the agent system.
+		if adapter.Agent() == model.AgentClaudeCode {
+			content = ensureClaudeFrontmatter(content, agentID)
+		}
+
 		destFilename := agentID + suffix
 		destPath := filepath.Join(destDir, destFilename)
 		result, writeErr := filemerge.WriteFileAtomic(destPath, content, 0o644)
@@ -96,11 +102,49 @@ func InjectAgents(homeDir string, adapter agents.Adapter, agentIDs []string) (In
 }
 
 // agentFileSuffix returns the file suffix to use for the given agent type.
-// VS Code uses ".agent.md"; all others (Cursor, etc.) use ".md".
+// VS Code uses ".agent.md"; all others (Claude Code, Cursor, etc.) use ".md".
 func agentFileSuffix(agentID model.AgentID) string {
 	if agentID == model.AgentVSCodeCopilot {
 		return ".agent.md"
 	}
 	return ".md"
+}
+
+// ensureClaudeFrontmatter prepends Claude Code YAML frontmatter to the agent
+// content if it doesn't already have one. The frontmatter is required for
+// Claude Code's agent system (~/.claude/agents/).
+func ensureClaudeFrontmatter(content []byte, agentID string) []byte {
+	text := string(content)
+
+	// Already has frontmatter — don't add another.
+	if strings.HasPrefix(strings.TrimSpace(text), "---") {
+		return content
+	}
+
+	// Extract the first non-empty line as description.
+	desc := agentID
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		// Strip markdown heading markers and decoration.
+		trimmed = strings.TrimLeft(trimmed, "# ")
+		trimmed = strings.TrimRight(trimmed, "=")
+		trimmed = strings.TrimSpace(trimmed)
+		if trimmed != "" {
+			desc = trimmed
+		}
+		break
+	}
+
+	frontmatter := "---\n" +
+		"name: " + agentID + "\n" +
+		"description: \"" + desc + "\"\n" +
+		"model: opus\n" +
+		"memory: user\n" +
+		"---\n\n"
+
+	return []byte(frontmatter + text)
 }
 
