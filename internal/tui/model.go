@@ -931,16 +931,13 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			m.setScreen(ScreenDetection)
 		case 1:
 			m = m.withResetOperationState()
-			m.setScreen(ScreenSync)
-		case 2:
-			m = m.withResetOperationState()
 			m.setScreen(ScreenUpgradeSync)
-		case 3:
+		case 2:
 			// "Configure Monday"
 			m.setScreen(ScreenMonday)
-		case 4:
+		case 3:
 			m.setScreen(ScreenModelConfig)
-		case 5:
+		case 4:
 			// "Create your own Agent" — blocked when no engines are available.
 			if !m.hasAgentBuilderEngines() {
 				return m, nil
@@ -954,7 +951,7 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			ta.SetHeight(5)
 			m.AgentBuilder.Textarea = ta
 			m.setScreen(ScreenAgentBuilderEngine)
-		case 6:
+		case 5:
 			if m.hasDetectedOpenCode() {
 				// "OpenCode SDD Profiles" (only shown when OpenCode is detected)
 				m.setScreen(ScreenProfiles)
@@ -962,7 +959,7 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 				// "Manage backups"
 				m.setScreen(ScreenBackups)
 			}
-		case 7:
+		case 6:
 			if m.hasDetectedOpenCode() {
 				// "Manage backups"
 				m.setScreen(ScreenBackups)
@@ -970,7 +967,7 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 				// "Quit"
 				return m, tea.Quit
 			}
-		case 8:
+		case 7:
 			// "Quit" (only reachable when showProfiles is true, so OpenCode is detected)
 			return m, tea.Quit
 		}

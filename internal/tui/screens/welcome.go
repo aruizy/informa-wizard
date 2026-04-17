@@ -22,7 +22,6 @@ func WelcomeOptions(showProfiles bool, profileCount int, hasEngines bool) []stri
 
 	opts := []string{
 		"Start installation",
-		"Sync configs",
 		"Update + Sync",
 		"Configure Monday",
 		"Configure models",
