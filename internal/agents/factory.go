@@ -43,12 +43,7 @@ func NewDefaultRegistry() (*Registry, error) {
 	for _, agent := range []model.AgentID{
 		model.AgentClaudeCode,
 		model.AgentOpenCode,
-		model.AgentGeminiCLI,
-		model.AgentCursor,
 		model.AgentVSCodeCopilot,
-		model.AgentCodex,
-		model.AgentAntigravity,
-		model.AgentWindsurf,
 	} {
 		adapter, err := NewAdapter(agent)
 		if err != nil {
