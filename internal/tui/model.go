@@ -14,10 +14,13 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agentbuilder"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/backup"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/catalog"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/cli"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/devagents"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/devskills"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/monday"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/sdd"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/opencode"
@@ -1448,10 +1451,11 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 		m.goToMondayOrReview()
 		return m, nil
 	case ScreenMonday:
-		// Enter on Monday screen: save inputs, persist to disk, return to welcome.
+		// Enter on Monday screen: save inputs, persist to disk, inject MCP, return to welcome.
 		m.Selection.Monday.Token = m.MondayTokenInput
 		m.Selection.Monday.BoardID = m.MondayBoardInput
 		m.saveMondayConfig()
+		m.injectMondayMCP()
 		m.setScreen(ScreenWelcome)
 		return m, nil
 	case ScreenReview:
@@ -2643,6 +2647,30 @@ func (m *Model) loadMondayConfig() {
 	if m.MondayBoardInput == "" {
 		m.MondayBoardInput = cfg.BoardID
 		m.MondayBoardPos = len([]rune(cfg.BoardID))
+	}
+}
+
+func (m Model) injectMondayMCP() {
+	if m.MondayTokenInput == "" {
+		return
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	cfg := model.MondayConfig{Token: m.MondayTokenInput, BoardID: m.MondayBoardInput}
+	// Inject MCP for all installed agents (read from state).
+	agentIDs := cli.DiscoverAgents(home)
+	reg, regErr := agents.NewDefaultRegistry()
+	if regErr != nil {
+		return
+	}
+	for _, agentID := range agentIDs {
+		adapter, ok := reg.Get(agentID)
+		if !ok {
+			continue
+		}
+		_, _ = monday.Inject(home, adapter, cfg)
 	}
 }
 
