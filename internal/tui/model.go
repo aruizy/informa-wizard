@@ -600,7 +600,7 @@ func (m Model) findProgressItem(stepID string) int {
 func (m Model) View() string {
 	switch m.Screen {
 	case ScreenWelcome:
-		return screens.RenderWelcome(m.Cursor, m.Version, "", m.hasDetectedOpenCode(), len(m.ProfileList), m.hasAgentBuilderEngines(), m.CommitDate)
+		return screens.RenderWelcome(m.Cursor, m.Version, "", m.hasAgentBuilderEngines(), m.CommitDate)
 	case ScreenUpgrade:
 		return screens.RenderUpgrade(m.UpdateResults, m.UpgradeReport, m.UpgradeErr, m.OperationRunning, m.UpdateCheckDone, m.Cursor, m.SpinnerFrame)
 	case ScreenSync:
@@ -953,23 +953,10 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			m.AgentBuilder.Textarea = ta
 			m.setScreen(ScreenAgentBuilderEngine)
 		case 5:
-			if m.hasDetectedOpenCode() {
-				// "OpenCode SDD Profiles" (only shown when OpenCode is detected)
-				m.setScreen(ScreenProfiles)
-			} else {
-				// "Manage backups"
-				m.setScreen(ScreenBackups)
-			}
+			// "Manage backups"
+			m.setScreen(ScreenBackups)
 		case 6:
-			if m.hasDetectedOpenCode() {
-				// "Manage backups"
-				m.setScreen(ScreenBackups)
-			} else {
-				// "Quit"
-				return m, tea.Quit
-			}
-		case 7:
-			// "Quit" (only reachable when showProfiles is true, so OpenCode is detected)
+			// "Quit"
 			return m, tea.Quit
 		}
 	case ScreenUpgrade:
@@ -2229,7 +2216,7 @@ func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) optionCount() int {
 	switch m.Screen {
 	case ScreenWelcome:
-		return len(screens.WelcomeOptions(m.hasDetectedOpenCode(), len(m.ProfileList), m.hasAgentBuilderEngines()))
+		return len(screens.WelcomeOptions(m.hasAgentBuilderEngines()))
 	case ScreenUpgrade:
 		if m.UpgradeReport != nil || m.UpgradeErr != nil {
 			return 1 // "return" option in results/error state

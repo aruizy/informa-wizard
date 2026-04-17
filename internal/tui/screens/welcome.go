@@ -14,35 +14,24 @@ import (
 // profileCount is used to show a badge with the current profile count.
 // When hasEngines is false, "Create your own Agent" is shown as disabled
 // (labelled "(no agents)") to signal that no supported AI engine is installed.
-func WelcomeOptions(showProfiles bool, profileCount int, hasEngines bool) []string {
+func WelcomeOptions(hasEngines bool) []string {
 	agentLabel := "Create your own Agent"
 	if !hasEngines {
 		agentLabel = "Create your own Agent (no agents)"
 	}
 
-	opts := []string{
+	return []string{
 		"Start installation",
 		"Update + Sync",
 		"Configure Monday",
 		"Configure models",
 		agentLabel,
+		"Manage backups",
+		"Quit",
 	}
-
-	if showProfiles {
-		profilesLabel := "OpenCode SDD Profiles"
-		if profileCount > 0 {
-			profilesLabel = fmt.Sprintf("OpenCode SDD Profiles (%d)", profileCount)
-		}
-		opts = append(opts, profilesLabel)
-	}
-
-	opts = append(opts, "Manage backups")
-	opts = append(opts, "Quit")
-
-	return opts
 }
 
-func RenderWelcome(cursor int, version string, updateBanner string, showProfiles bool, profileCount int, hasEngines bool, commitDate *time.Time) string {
+func RenderWelcome(cursor int, version string, updateBanner string, hasEngines bool, commitDate *time.Time) string {
 	var b strings.Builder
 
 	b.WriteString(styles.RenderLogo())
@@ -61,7 +50,7 @@ func RenderWelcome(cursor int, version string, updateBanner string, showProfiles
 	b.WriteString("\n")
 	b.WriteString(styles.HeadingStyle.Render("Menu"))
 	b.WriteString("\n\n")
-	b.WriteString(renderOptions(WelcomeOptions(showProfiles, profileCount, hasEngines), cursor))
+	b.WriteString(renderOptions(WelcomeOptions(hasEngines), cursor))
 	b.WriteString("\n")
 	b.WriteString(styles.HelpStyle.Render("j/k: navigate • enter: select • q: quit"))
 
