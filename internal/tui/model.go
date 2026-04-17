@@ -1730,20 +1730,26 @@ func (m Model) startUpgradeSync() tea.Cmd {
 	syncFn := m.SyncFn
 
 	pullCmd := func() tea.Msg {
-		// Pull informa-wizard itself if running from a git clone.
+		// Pull and rebuild informa-wizard if the source repo is available.
+		// Try GOPATH/src first, then common clone locations.
+		home := homeDir()
+		wizardRepoCandidates := []string{}
+		if gopath := os.Getenv("GOPATH"); gopath != "" {
+			wizardRepoCandidates = append(wizardRepoCandidates,
+				filepath.Join(gopath, "src", "gitlab.informa.tools", "ai", "wizard", "informa-wizard"))
+		}
+		if home != "" {
+			wizardRepoCandidates = append(wizardRepoCandidates,
+				filepath.Join(home, "go", "src", "gitlab.informa.tools", "ai", "wizard", "informa-wizard"),
+				filepath.Join(home, "GIT", "informa-wizard"),
+				filepath.Join(home, "git", "informa-wizard"),
+			)
+		}
+		// Also try walking up from the executable location (covers `go run` from source).
 		if exe, err := os.Executable(); err == nil {
-			dir := filepath.Dir(exe)
-			// Walk upward to find a .git directory (at most 5 levels).
-			candidate := dir
+			candidate := filepath.Dir(exe)
 			for i := 0; i < 5; i++ {
-				if _, err := os.Stat(filepath.Join(candidate, ".git")); err == nil {
-					// Found the git root — pull then rebuild.
-					_ = devskills.Pull(candidate)
-					goInstall := exec.Command("go", "install", "./cmd/informa-wizard")
-					goInstall.Dir = candidate
-					_ = goInstall.Run()
-					break
-				}
+				wizardRepoCandidates = append(wizardRepoCandidates, candidate)
 				parent := filepath.Dir(candidate)
 				if parent == candidate {
 					break
@@ -1751,9 +1757,18 @@ func (m Model) startUpgradeSync() tea.Cmd {
 				candidate = parent
 			}
 		}
+		for _, repoDir := range wizardRepoCandidates {
+			if _, err := os.Stat(filepath.Join(repoDir, ".git")); err == nil {
+				_ = devskills.Pull(repoDir)
+				goInstall := exec.Command("go", "install", "./cmd/informa-wizard")
+				goInstall.Dir = repoDir
+				_ = goInstall.Run()
+				break
+			}
+		}
 
 		// Pull dev-skills and dev-agents repos (skip silently if absent).
-		home := homeDir()
+		home = homeDir()
 		if home != "" {
 			devSkillsDir := filepath.Join(home, ".informa-wizard", "dev-skills")
 			if _, err := os.Stat(devSkillsDir); err == nil {
