@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -934,7 +935,8 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			m = m.withResetOperationState()
 			m.setScreen(ScreenUpgradeSync)
 		case 2:
-			// "Configure Monday"
+			// "Configure Monday" — load existing config if available.
+			m.loadMondayConfig()
 			m.setScreen(ScreenMonday)
 		case 3:
 			m.setScreen(ScreenModelConfig)
@@ -1446,10 +1448,10 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 		m.goToMondayOrReview()
 		return m, nil
 	case ScreenMonday:
-		// Enter on Monday screen: save inputs and return to welcome menu.
-		// Monday is configured from the welcome menu, not the install flow.
+		// Enter on Monday screen: save inputs, persist to disk, return to welcome.
 		m.Selection.Monday.Token = m.MondayTokenInput
 		m.Selection.Monday.BoardID = m.MondayBoardInput
+		m.saveMondayConfig()
 		m.setScreen(ScreenWelcome)
 		return m, nil
 	case ScreenReview:
@@ -2628,6 +2630,53 @@ func mondayCursorPos(m Model) int {
 		return m.MondayTokenPos
 	}
 	return m.MondayBoardPos
+}
+
+type mondayJSON struct {
+	Token   string `json:"token"`
+	BoardID string `json:"board_id"`
+}
+
+func mondayConfigPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".informa-wizard", "monday.json")
+}
+
+func (m *Model) loadMondayConfig() {
+	path := mondayConfigPath()
+	if path == "" {
+		return
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var cfg mondayJSON
+	if json.Unmarshal(data, &cfg) != nil {
+		return
+	}
+	if m.MondayTokenInput == "" {
+		m.MondayTokenInput = cfg.Token
+		m.MondayTokenPos = len([]rune(cfg.Token))
+	}
+	if m.MondayBoardInput == "" {
+		m.MondayBoardInput = cfg.BoardID
+		m.MondayBoardPos = len([]rune(cfg.BoardID))
+	}
+}
+
+func (m Model) saveMondayConfig() {
+	path := mondayConfigPath()
+	if path == "" {
+		return
+	}
+	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	cfg := mondayJSON{Token: m.MondayTokenInput, BoardID: m.MondayBoardInput}
+	data, _ := json.MarshalIndent(cfg, "", "  ")
+	_ = os.WriteFile(path, append(data, '\n'), 0o644)
 }
 
 func (m Model) shouldShowClaudeModelPickerScreen() bool {
