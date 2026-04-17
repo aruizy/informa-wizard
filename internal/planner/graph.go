@@ -39,9 +39,7 @@ func MVPGraph() Graph {
 		model.ComponentSDD:        nil,
 		model.ComponentSkills:     {model.ComponentSDD},
 		model.ComponentContext7:   nil,
-		model.ComponentPersona:    nil,
 		model.ComponentPermission: nil,
-		model.ComponentGGA:        nil,
 		model.ComponentTheme:      nil,
 		model.ComponentMonday:     nil,
 		model.ComponentDevSkills:  nil,
@@ -53,15 +51,9 @@ func MVPGraph() Graph {
 // the second when BOTH are present in the resolved plan. These are NOT hard
 // dependencies — selecting one does not force-install the other.
 //
-// This exists because StrategyFileReplace agents (OpenCode, Cursor, Gemini,
-// Codex) have Persona write the base file and SDD/Engram append to it. If
-// SDD ran before Persona, Persona would overwrite the SDD sections.
-//
 // INVARIANT: the `first` element in every pair must have nil deps in MVPGraph.
 // See applySoftOrdering() safety contract in order.go.
 var softOrderingPairs = [][2]model.ComponentID{
-	{model.ComponentPersona, model.ComponentSDD},
-	{model.ComponentPersona, model.ComponentEngram},
 	{model.ComponentSDD, model.ComponentEngram},
 }
 

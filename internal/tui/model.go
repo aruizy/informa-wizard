@@ -668,7 +668,6 @@ func (m Model) View() string {
 		return screens.RenderComplete(screens.CompletePayload{
 			ConfiguredAgents:    len(m.Selection.Agents),
 			InstalledComponents: len(m.Selection.Components),
-			GGAInstalled:        hasSelectedComponent(m.Selection.Components, model.ComponentGGA),
 			FailedSteps:         extractFailedSteps(m.Execution),
 			RollbackPerformed:   len(m.Execution.Rollback.Steps) > 0,
 			MissingDeps:         extractMissingDeps(m.Detection),
@@ -2671,7 +2670,7 @@ func componentsForPreset(preset model.PresetID) []model.ComponentID {
 	case model.PresetMinimal:
 		return []model.ComponentID{model.ComponentSDD, model.ComponentDevSkills, model.ComponentDevAgents}
 	case model.PresetEcosystemOnly:
-		return []model.ComponentID{model.ComponentSDD, model.ComponentSkills, model.ComponentContext7, model.ComponentGGA, model.ComponentMonday, model.ComponentDevSkills, model.ComponentDevAgents}
+		return []model.ComponentID{model.ComponentSDD, model.ComponentSkills, model.ComponentContext7, model.ComponentMonday, model.ComponentDevSkills, model.ComponentDevAgents}
 	case model.PresetCustom:
 		return nil
 	default:
@@ -2679,9 +2678,7 @@ func componentsForPreset(preset model.PresetID) []model.ComponentID {
 			model.ComponentSDD,
 			model.ComponentSkills,
 			model.ComponentContext7,
-			model.ComponentPersona,
 			model.ComponentPermission,
-			model.ComponentGGA,
 			model.ComponentMonday,
 			model.ComponentDevSkills,
 			model.ComponentDevAgents,

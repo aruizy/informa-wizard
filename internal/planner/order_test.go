@@ -13,7 +13,6 @@ func TestTopologicalSortOrdersDependenciesFirst(t *testing.T) {
 		model.ComponentSkills:   {model.ComponentSDD},
 		model.ComponentSDD:      {model.ComponentEngram},
 		model.ComponentEngram:   nil,
-		model.ComponentPersona:  nil,
 		model.ComponentContext7: nil,
 	}
 
@@ -25,7 +24,6 @@ func TestTopologicalSortOrdersDependenciesFirst(t *testing.T) {
 	if !reflect.DeepEqual(ordered, []model.ComponentID{
 		model.ComponentContext7,
 		model.ComponentEngram,
-		model.ComponentPersona,
 		model.ComponentSDD,
 		model.ComponentSkills,
 	}) {
@@ -89,25 +87,21 @@ func TestApplySoftOrderingEdgeCases(t *testing.T) {
 	}
 }
 
-func TestApplySoftOrderingBothMVPPairsWithFullSelection(t *testing.T) {
-	// Simulates the real scenario: topo gives [context7, engram, persona, sdd, skills]
-	// Both MVPGraph soft pairs should result in persona before engram AND sdd.
+func TestApplySoftOrderingMVPPairWithFullSelection(t *testing.T) {
+	// Simulates the real scenario: topo gives [context7, sdd, engram, skills]
+	// The remaining soft pair {SDD, Engram} should result in SDD before Engram.
 	ordered := []model.ComponentID{
 		model.ComponentContext7,
 		model.ComponentEngram,
-		model.ComponentPersona,
 		model.ComponentSDD,
 		model.ComponentSkills,
 	}
 
 	result := applySoftOrdering(ordered, SoftOrderingConstraints())
 
-	// Persona must appear before both Engram and SDD.
-	personaIdx, engramIdx, sddIdx := -1, -1, -1
+	engramIdx, sddIdx := -1, -1
 	for i, c := range result {
 		switch c {
-		case model.ComponentPersona:
-			personaIdx = i
 		case model.ComponentEngram:
 			engramIdx = i
 		case model.ComponentSDD:
@@ -115,14 +109,8 @@ func TestApplySoftOrderingBothMVPPairsWithFullSelection(t *testing.T) {
 		}
 	}
 
-	if personaIdx < 0 || engramIdx < 0 || sddIdx < 0 {
+	if engramIdx < 0 || sddIdx < 0 {
 		t.Fatalf("missing components in result: %v", result)
-	}
-	if personaIdx > engramIdx {
-		t.Fatalf("Persona (%d) must be before Engram (%d), got %v", personaIdx, engramIdx, result)
-	}
-	if personaIdx > sddIdx {
-		t.Fatalf("Persona (%d) must be before SDD (%d), got %v", personaIdx, sddIdx, result)
 	}
 	// Soft ordering: SDD must be before Engram (SDD writes base, Engram appends)
 	if sddIdx > engramIdx {

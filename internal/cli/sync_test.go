@@ -461,51 +461,6 @@ func TestComponentSyncStepRunsSDDInject(t *testing.T) {
 	}
 }
 
-func TestComponentSyncStepRunsGGAInjectWithoutBinaryInstall(t *testing.T) {
-	home := t.TempDir()
-	restoreCommand := runCommand
-	restoreLookPath := cmdLookPath
-	t.Cleanup(func() {
-		runCommand = restoreCommand
-		cmdLookPath = restoreLookPath
-	})
-
-	cmdLookPath = func(name string) (string, error) {
-		return "", os.ErrNotExist
-	}
-
-	var commandsCalled []string
-	runCommand = func(name string, args ...string) error {
-		commandsCalled = append(commandsCalled, name+" "+strings.Join(args, " "))
-		return nil
-	}
-
-	step := componentSyncStep{
-		id:        "sync:gga",
-		component: model.ComponentGGA,
-		homeDir:   home,
-		agents:    []model.AgentID{model.AgentOpenCode},
-		selection: model.Selection{},
-	}
-
-	if err := step.Run(); err != nil {
-		t.Fatalf("componentSyncStep.Run() GGA error = %v", err)
-	}
-
-	// No GGA binary install command should have been called.
-	for _, cmd := range commandsCalled {
-		if strings.Contains(cmd, "clone") || strings.Contains(cmd, "install.sh") {
-			t.Errorf("componentSyncStep GGA must not run binary install, got command: %s", cmd)
-		}
-	}
-
-	// GGA runtime asset should be written.
-	prModePath := filepath.Join(home, ".local", "share", "gga", "lib", "pr_mode.sh")
-	if _, err := os.Stat(prModePath); err != nil {
-		t.Errorf("expected GGA runtime asset at %q: %v", prModePath, err)
-	}
-}
-
 // ─── Phase 4: RunSync integration tests ───────────────────────────────────
 
 func TestRunSyncAppliesManagedFilesystemChanges(t *testing.T) {
@@ -1035,7 +990,6 @@ func TestRunSyncWithProfilesIntegration(t *testing.T) {
 			model.ComponentSDD,
 			model.ComponentEngram,
 			model.ComponentContext7,
-			model.ComponentGGA,
 			model.ComponentSkills,
 		},
 		SDDMode:  model.SDDModeSingle,
@@ -1154,7 +1108,6 @@ func TestRunSyncDetectsExistingProfilesOnRegularSync(t *testing.T) {
 			model.ComponentSDD,
 			model.ComponentEngram,
 			model.ComponentContext7,
-			model.ComponentGGA,
 			model.ComponentSkills,
 		},
 		SDDMode: model.SDDModeSingle,
@@ -1193,7 +1146,6 @@ func TestRunSyncDetectsExistingProfilesOnRegularSync(t *testing.T) {
 			model.ComponentSDD,
 			model.ComponentEngram,
 			model.ComponentContext7,
-			model.ComponentGGA,
 			model.ComponentSkills,
 		},
 		SDDMode: model.SDDModeSingle,
@@ -1265,7 +1217,7 @@ func TestRunSyncWithSelection_WritesExpectedFiles(t *testing.T) {
 
 	sel := model.Selection{
 		Agents:     []model.AgentID{model.AgentOpenCode},
-		Components: []model.ComponentID{model.ComponentSDD, model.ComponentEngram, model.ComponentContext7, model.ComponentGGA, model.ComponentSkills},
+		Components: []model.ComponentID{model.ComponentSDD, model.ComponentEngram, model.ComponentContext7, model.ComponentSkills},
 		SDDMode:    model.SDDModeSingle,
 	}
 
@@ -1301,7 +1253,7 @@ func TestRunSyncWithSelection_FilesChangedOnFreshHome(t *testing.T) {
 
 	sel := model.Selection{
 		Agents:     []model.AgentID{model.AgentOpenCode},
-		Components: []model.ComponentID{model.ComponentSDD, model.ComponentEngram, model.ComponentContext7, model.ComponentGGA, model.ComponentSkills},
+		Components: []model.ComponentID{model.ComponentSDD, model.ComponentEngram, model.ComponentContext7, model.ComponentSkills},
 		SDDMode:    model.SDDModeSingle,
 	}
 
@@ -1331,7 +1283,7 @@ func TestRunSyncWithSelection_IsIdempotent(t *testing.T) {
 
 	sel := model.Selection{
 		Agents:     []model.AgentID{model.AgentOpenCode},
-		Components: []model.ComponentID{model.ComponentSDD, model.ComponentEngram, model.ComponentContext7, model.ComponentGGA, model.ComponentSkills},
+		Components: []model.ComponentID{model.ComponentSDD, model.ComponentEngram, model.ComponentContext7, model.ComponentSkills},
 		SDDMode:    model.SDDModeSingle,
 	}
 
@@ -1373,7 +1325,7 @@ func TestRunSyncWithSelection_SelectionAgentsForwarded(t *testing.T) {
 
 	sel := model.Selection{
 		Agents:     []model.AgentID{model.AgentOpenCode},
-		Components: []model.ComponentID{model.ComponentSDD, model.ComponentEngram, model.ComponentContext7, model.ComponentGGA, model.ComponentSkills},
+		Components: []model.ComponentID{model.ComponentSDD, model.ComponentEngram, model.ComponentContext7, model.ComponentSkills},
 	}
 
 	result, err := RunSyncWithSelection(home, sel)

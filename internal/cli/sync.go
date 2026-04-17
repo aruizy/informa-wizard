@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -15,7 +14,6 @@ import (
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/devagents"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/devskills"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/engram"
-	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/gga"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/mcp"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/permissions"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/sdd"
@@ -542,25 +540,6 @@ func (s componentSyncStep) Run() error {
 		}
 		return nil
 
-	case model.ComponentGGA:
-		// Sync: ensure runtime assets are current and inject config.
-		// NO binary install.
-		if err := gga.EnsureRuntimeAssets(s.homeDir); err != nil {
-			return fmt.Errorf("sync gga runtime assets: %w", err)
-		}
-		if runtime.GOOS == "windows" {
-			if err := gga.EnsurePowerShellShim(s.homeDir); err != nil {
-				return fmt.Errorf("ensure gga powershell shim: %w", err)
-			}
-		}
-		res, err := gga.Inject(s.homeDir, s.agents)
-		if err != nil {
-			return fmt.Errorf("sync gga config: %w", err)
-		}
-		// Count GGA files changed based on individual Changed flags.
-		s.countChanged(boolToInt(res.ConfigChanged) + boolToInt(res.AgentsChanged))
-		return nil
-
 	case model.ComponentPermission:
 		// Opt-in only — reached when --include-permissions is set.
 		for _, adapter := range adapters {
@@ -638,7 +617,6 @@ func (s componentSyncStep) Run() error {
 		return nil
 
 	default:
-		// Persona and any unknown components are out of sync scope.
 		return fmt.Errorf("component %q is not supported in sync runtime", s.component)
 	}
 }

@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -16,11 +15,9 @@ import (
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/devagents"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/devskills"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/engram"
-	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/gga"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/mcp"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/monday"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/permissions"
-	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/persona"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/sdd"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/skills"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/theme"
@@ -160,9 +157,6 @@ func RunInstall(args []string, detection system.DetectionResult) (InstallResult,
 }
 
 func withPostInstallNotes(report verify.Report, resolved planner.ResolvedPlan) verify.Report {
-	if hasComponent(resolved.OrderedComponents, model.ComponentGGA) && report.Ready {
-		report.FinalNote = report.FinalNote + "\n\nGGA is now installed globally. To enable project hooks, run in each repo:\n- gga init\n- gga install"
-	}
 	report = withGoInstallPathNote(report, resolved)
 	return report
 }
@@ -528,13 +522,6 @@ func (s componentApplyStep) Run() error {
 			}
 		}
 		return nil
-	case model.ComponentPersona:
-		for _, adapter := range adapters {
-			if _, err := persona.Inject(s.homeDir, adapter, s.selection.Persona); err != nil {
-				return fmt.Errorf("inject persona for %q: %w", adapter.Agent(), err)
-			}
-		}
-		return nil
 	case model.ComponentPermission:
 		for _, adapter := range adapters {
 			if _, err := permissions.Inject(s.homeDir, adapter); err != nil {
@@ -564,52 +551,6 @@ func (s componentApplyStep) Run() error {
 			if _, err := skills.Inject(s.homeDir, adapter, skillIDs); err != nil {
 				return fmt.Errorf("inject skills for %q: %w", adapter.Agent(), err)
 			}
-		}
-		return nil
-	case model.ComponentGGA:
-		if !ggaAvailable(s.profile) {
-			// GGA not found on any known PATH — install it.
-			commands, err := gga.InstallCommand(s.profile)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "WARNING: gga install skipped — could not resolve install command: %v\n", err)
-				return nil
-			}
-			installErr := runCommandSequence(commands)
-			if installErr != nil {
-				if ggaAvailable(s.profile) {
-					// The GGA install script uses `set -e` and `read -p` for
-					// the "already installed" confirmation. Without a TTY
-					// (common in automated/re-run scenarios), `read` fails
-					// with exit code 1 and `set -e` kills the script before
-					// it can exit 0. If GGA is actually available after the
-					// script ran, the install succeeded functionally — treat
-					// as success but warn the user.
-					fmt.Fprintf(os.Stderr, "WARNING: gga install command reported an error but gga is available — continuing. Error was: %v\n", installErr)
-				} else {
-					fmt.Fprintf(os.Stderr, "WARNING: gga install failed — skipping gga component. Error was: %v\n", installErr)
-					return nil
-				}
-			}
-		}
-		if err := gga.EnsureRuntimeAssets(s.homeDir); err != nil {
-			fmt.Fprintf(os.Stderr, "WARNING: gga runtime assets failed — skipping: %v\n", err)
-			return nil
-		}
-		if runtime.GOOS == "windows" {
-			if err := gga.EnsurePowerShellShim(s.homeDir); err != nil {
-				fmt.Fprintf(os.Stderr, "WARNING: gga powershell shim failed — skipping: %v\n", err)
-			}
-			// Add GGA bin dir to the user PATH persistently on Windows.
-			// GGA's install.sh drops the binary into ~/bin which is not on PATH by default.
-			ggaBinDir := filepath.Join(s.homeDir, "bin")
-			if err := system.AddToUserPath(ggaBinDir); err != nil {
-				// Non-fatal: warn but continue — GGA was installed successfully.
-				fmt.Fprintf(os.Stderr, "WARNING: could not add %s to PATH: %v\n", ggaBinDir, err)
-			}
-		}
-		if _, err := gga.Inject(s.homeDir, s.agents); err != nil {
-			fmt.Fprintf(os.Stderr, "WARNING: gga config injection failed — skipping: %v\n", err)
-			return nil
 		}
 		return nil
 	case model.ComponentTheme:
@@ -862,13 +803,6 @@ func backupTargets(homeDir string, selection model.Selection, resolved planner.R
 		}
 	}
 
-	// Also include GGA config paths (not under any agent dir).
-	if hasComponent(resolved.OrderedComponents, model.ComponentGGA) {
-		for _, p := range walkDirFiles(filepath.Join(homeDir, ".config", "gga")) {
-			paths[p] = struct{}{}
-		}
-	}
-
 	// Component-specific paths catch files outside agent config dirs
 	// (e.g., VS Code settings in platform-specific locations).
 	for _, component := range resolved.OrderedComponents {
@@ -995,28 +929,10 @@ func componentPaths(homeDir string, selection model.Selection, adapters []agents
 				// Codex uses TOML for Engram but Context7 is not injected via TOML.
 				// No path to report — Context7 injection is skipped for TOML agents.
 			}
-		case model.ComponentPersona:
-			if selection.Persona == model.PersonaCustom {
-				break
-			}
-			if adapter.SupportsSystemPrompt() {
-				paths = append(paths, adapter.SystemPromptFile(homeDir))
-			}
-			if selection.Persona == model.PersonaGentleman {
-				if adapter.SupportsOutputStyles() {
-					paths = append(paths, adapter.OutputStyleDir(homeDir)+"/gentleman.md")
-					if p := adapter.SettingsPath(homeDir); p != "" {
-						paths = append(paths, p)
-					}
-				}
-			}
 		case model.ComponentPermission:
 			if p := adapter.SettingsPath(homeDir); p != "" {
 				paths = append(paths, p)
 			}
-		case model.ComponentGGA:
-			paths = append(paths, gga.ConfigPath(homeDir))
-			paths = append(paths, gga.AgentsTemplatePath(homeDir))
 		case model.ComponentTheme:
 			if p := adapter.SettingsPath(homeDir); p != "" {
 				paths = append(paths, p)
