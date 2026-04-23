@@ -2,7 +2,7 @@
 
 <h1>Informa Wizard</h1>
 
-<p><strong>One command. Any agent. Any OS. The Informa Wizard ecosystem -- configured and ready.</strong></p>
+<p><strong>One command. Every agent configured. SDD workflow, skills, and MCP servers ready to go.</strong></p>
 
 <p>
 <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
