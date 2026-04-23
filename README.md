@@ -18,22 +18,36 @@
 
 This is an **ecosystem configurator** -- it takes whatever AI coding agent(s) you use and supercharges them with the Informa Wizard stack: persistent memory, Spec-Driven Development workflow, curated coding skills, MCP servers (including Monday.com integration), security-first permissions, and per-phase model assignment so each SDD step can run on a different model.
 
-**Before**: "I installed Claude Code / OpenCode / Cursor, but it's just a chatbot that writes code."
+**Before**: "I installed Claude Code / OpenCode / VS Code, but it's just a chatbot that writes code."
 
 **After**: Your agent now has memory, skills, workflow, MCP tools, and Monday.com task management integrated into the development cycle.
 
-### 8 Supported Agents
+### Supported Agents
 
 | Agent | Delegation Model | Key Feature |
 |-------|:---:|---|
-| **Claude Code** | Full (Task tool) | Sub-agents, output styles |
-| **OpenCode** | Full (multi-mode overlay) | Per-phase model routing |
-| **Gemini CLI** | Full (experimental) | Custom agents in `~/.gemini/agents/` |
-| **Cursor** | Full (native subagents) | 9 SDD agents in `~/.cursor/agents/` |
-| **VS Code Copilot** | Full (runSubagent) | Parallel execution |
-| **Codex** | Solo-agent | CLI-native, TOML config |
-| **Windsurf** | Solo-agent | Plan Mode, Code Mode, native workflows |
-| **Antigravity** | Solo-agent + Mission Control | Built-in Browser/Terminal sub-agents |
+| **Claude Code** | Full (Task tool) | Sub-agents, custom agents in `~/.claude/agents/` |
+| **OpenCode** | Full (multi-mode overlay) | Per-phase model routing, JSON agent definitions |
+| **VS Code Copilot** | Full (runSubagent) | Agent files in `prompts/`, parallel execution |
+
+---
+
+## Pre-requisites
+
+Install Go 1.24+ if not already present:
+
+```bash
+# Windows (chocolatey)
+choco install golang
+
+# macOS (homebrew)
+brew install go
+
+# Linux
+sudo apt install golang  # or your package manager
+```
+
+Verify: `go version`
 
 ---
 
