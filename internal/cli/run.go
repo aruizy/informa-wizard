@@ -649,7 +649,7 @@ func (s componentApplyStep) Run() error {
 			agentModel = string(m)
 		}
 		for _, adapter := range adapters {
-			if _, err := devagents.InjectAgents(s.homeDir, adapter, agentSelections, agentModel); err != nil {
+			if _, err := devagents.InjectAgents(s.homeDir, adapter, agentSelections, agentModel, s.agents...); err != nil {
 				return fmt.Errorf("inject dev-agents for %q: %w", adapter.Agent(), err)
 			}
 		}

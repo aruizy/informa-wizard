@@ -608,7 +608,7 @@ func (s componentSyncStep) Run() error {
 			return fmt.Errorf("pull dev-agents repo: %w", err)
 		}
 		for _, adapter := range adapters {
-			res, err := devagents.InjectAgents(s.homeDir, adapter, agentCfg.InstalledAgents, "")
+			res, err := devagents.InjectAgents(s.homeDir, adapter, agentCfg.InstalledAgents, "", s.selection.Agents...)
 			if err != nil {
 				return fmt.Errorf("inject dev-agents for %q: %w", adapter.Agent(), err)
 			}

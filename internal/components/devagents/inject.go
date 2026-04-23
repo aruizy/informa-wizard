@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents"
@@ -44,10 +46,22 @@ type subAgentInjector interface {
 // InjectAgents copies agent files to the adapter's sub-agents directory.
 // defaultModel controls the "model:" field in Claude Code frontmatter
 // (e.g., "opus", "sonnet"). Pass "" to default to "sonnet".
-func InjectAgents(homeDir string, adapter agents.Adapter, agentIDs []string, defaultModel string) (InjectionResult, error) {
+// installedAgents is the list of agent IDs being installed in this run.
+// When VS Code >= 1.116.0 and Claude Code is also installed, VS Code reads
+// agents directly from ~/.claude/agents/ — no need to copy them separately.
+func InjectAgents(homeDir string, adapter agents.Adapter, agentIDs []string, defaultModel string, installedAgentIDs ...model.AgentID) (InjectionResult, error) {
 	// OpenCode uses JSON config, not agent files.
 	if adapter.Agent() == model.AgentOpenCode {
 		return injectOpenCodeAgents(homeDir, adapter, agentIDs)
+	}
+
+	// VS Code >= 1.116.0 reads agents from ~/.claude/agents/ when Claude Code
+	// is also installed — skip duplicate injection.
+	if adapter.Agent() == model.AgentVSCodeCopilot && hasAgent(installedAgentIDs, model.AgentClaudeCode) {
+		if vsVer := vscodeVersion(); vsVer != "" && versionAtLeast(vsVer, "1.116.0") {
+			log.Printf("devagents: skipping VS Code injection — v%s reads from ~/.claude/agents/", vsVer)
+			return InjectionResult{}, nil
+		}
 	}
 
 	sai, ok := adapter.(subAgentInjector)
@@ -246,5 +260,49 @@ func ensureClaudeFrontmatter(content []byte, agentID string, defaultModel string
 		"---\n\n"
 
 	return []byte(frontmatter + text)
+}
+
+// vscodeVersion returns the VS Code version string (e.g., "1.116.0") or "" if unavailable.
+func vscodeVersion() string {
+	out, err := exec.Command("code", "--version").Output()
+	if err != nil {
+		return ""
+	}
+	// First line is the version number.
+	line := strings.TrimSpace(strings.Split(string(out), "\n")[0])
+	return line
+}
+
+// versionAtLeast returns true if version >= minVersion (semver comparison).
+func versionAtLeast(version, minVersion string) bool {
+	v := parseVersion(version)
+	m := parseVersion(minVersion)
+	for i := 0; i < 3; i++ {
+		if v[i] > m[i] {
+			return true
+		}
+		if v[i] < m[i] {
+			return false
+		}
+	}
+	return true // equal
+}
+
+func parseVersion(s string) [3]int {
+	var parts [3]int
+	for i, p := range strings.SplitN(s, ".", 3) {
+		n, _ := strconv.Atoi(p)
+		parts[i] = n
+	}
+	return parts
+}
+
+func hasAgent(ids []model.AgentID, target model.AgentID) bool {
+	for _, id := range ids {
+		if id == target {
+			return true
+		}
+	}
+	return false
 }
 
