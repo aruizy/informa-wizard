@@ -493,10 +493,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case UpgradePhaseCompletedMsg:
 		// Pull phase done; sync phase is about to start (OperationRunning stays true).
 		m.UpgradeErr = msg.Err
-		if msg.Err == nil && msg.Report.Results != nil {
-			report := msg.Report
-			m.UpgradeReport = &report
-		}
+		// Always set a report so State 3 (results screen) is reached after sync.
+		report := msg.Report
+		m.UpgradeReport = &report
 		m.WizardNeedsRestart = msg.WizardUpdated
 		m.UpdateResults = nil
 		m.UpdateCheckDone = false
