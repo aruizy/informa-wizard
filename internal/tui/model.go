@@ -1758,10 +1758,14 @@ func (m Model) startUpgradeSync() tea.Cmd {
 			if data, err := os.ReadFile(sourceDirFile); err == nil {
 				repoDir := strings.TrimSpace(string(data))
 				if _, err := os.Stat(filepath.Join(repoDir, ".git")); err == nil {
-					// Check current HEAD before pull.
 					headBefore := gitHead(repoDir)
-					_ = devskills.Pull(repoDir)
+					pullErr := devskills.Pull(repoDir)
 					headAfter := gitHead(repoDir)
+					// Log to file for debugging.
+					logPath := filepath.Join(home, ".informa-wizard", "update.log")
+					logMsg := fmt.Sprintf("pull: before=%s after=%s pullErr=%v updated=%v\n",
+						headBefore, headAfter, pullErr, headBefore != headAfter)
+					_ = os.WriteFile(logPath, []byte(logMsg), 0o644)
 					if headBefore != "" && headAfter != "" && headBefore != headAfter {
 						wizardUpdated = true
 					}
