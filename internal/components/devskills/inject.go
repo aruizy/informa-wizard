@@ -16,17 +16,17 @@ type InjectionResult struct {
 	Files   []string
 }
 
-// InjectSkills copies SKILL.md files from the cloned dev-skills repository to
-// the agent's skill directory for each skillID in skillIDs.
+// InjectSkills copies the entire skill directory (SKILL.md + all reference files)
+// from the cloned dev-skills repository to the agent's skill directory.
 //
-// The source path for each skill is:
+// The source directory for each skill is:
 //
-//	~/.informa-wizard/dev-skills/skills/<skillID>/SKILL.md
+//	~/.informa-wizard/dev-skills/skills/<skillID>/
 //
-// The destination path is determined by adapter.SkillsDir(homeDir).
+// The destination directory is adapter.SkillsDir(homeDir)/<skillID>/.
 //
 // If adapter.SupportsSkills() is false, returns an empty result without error.
-// If a skill's SKILL.md is not found in the repo, a warning is logged and the
+// If a skill directory is not found in the repo, a warning is logged and the
 // skill is skipped (no error).
 func InjectSkills(homeDir string, adapter agents.Adapter, skillIDs []string) (InjectionResult, error) {
 	if !adapter.SupportsSkills() {
@@ -38,24 +38,39 @@ func InjectSkills(homeDir string, adapter agents.Adapter, skillIDs []string) (In
 	changed := false
 
 	for _, skillID := range skillIDs {
-		sourcePath := filepath.Join(repoDir, "skills", skillID, "SKILL.md")
-		content, err := os.ReadFile(sourcePath)
+		sourceDir := filepath.Join(repoDir, "skills", skillID)
+		entries, err := os.ReadDir(sourceDir)
 		if err != nil {
 			if os.IsNotExist(err) {
-				log.Printf("devskills: skipping %q — SKILL.md not found in repo", skillID)
+				log.Printf("devskills: skipping %q — directory not found in repo", skillID)
 				continue
 			}
-			return InjectionResult{}, fmt.Errorf("skill %s: read failed: %w", skillID, err)
+			return InjectionResult{}, fmt.Errorf("skill %s: read dir failed: %w", skillID, err)
 		}
 
-		destPath := filepath.Join(adapter.SkillsDir(homeDir), skillID, "SKILL.md")
-		result, writeErr := filemerge.WriteFileAtomic(destPath, content, 0o644)
-		if writeErr != nil {
-			return InjectionResult{}, fmt.Errorf("skill %s: write failed: %w", skillID, writeErr)
+		destDir := filepath.Join(adapter.SkillsDir(homeDir), skillID)
+		if err := os.MkdirAll(destDir, 0o755); err != nil {
+			return InjectionResult{}, fmt.Errorf("skill %s: create dir failed: %w", skillID, err)
 		}
 
-		changed = changed || result.Changed
-		files = append(files, destPath)
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			content, readErr := os.ReadFile(filepath.Join(sourceDir, entry.Name()))
+			if readErr != nil {
+				return InjectionResult{}, fmt.Errorf("skill %s/%s: read failed: %w", skillID, entry.Name(), readErr)
+			}
+
+			destPath := filepath.Join(destDir, entry.Name())
+			result, writeErr := filemerge.WriteFileAtomic(destPath, content, 0o644)
+			if writeErr != nil {
+				return InjectionResult{}, fmt.Errorf("skill %s/%s: write failed: %w", skillID, entry.Name(), writeErr)
+			}
+
+			changed = changed || result.Changed
+			files = append(files, destPath)
+		}
 	}
 
 	return InjectionResult{Changed: changed, Files: files}, nil
