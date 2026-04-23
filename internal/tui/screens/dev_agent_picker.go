@@ -10,16 +10,28 @@ import (
 // RenderDevAgentPicker renders the dev-agent selection screen.
 // agents is the list of discovered agents, checked is the per-agent checked state,
 // and cursor is the currently focused row.
-func RenderDevAgentPicker(agents []devagents.DiscoveredAgent, checked []bool, cursor int) string {
+func RenderDevAgentPicker(agents []devagents.DiscoveredAgent, checked []bool, cursor int, cloneErr string) string {
 	var b strings.Builder
 
 	b.WriteString(styles.TitleStyle.Render("Select Dev Agents"))
 	b.WriteString("\n\n")
-	b.WriteString(styles.SubtextStyle.Render("Toggle agents with space. Press enter to confirm."))
-	b.WriteString("\n\n")
 
-	if len(agents) == 0 {
-		b.WriteString(styles.SubtextStyle.Render("No agents found. Agents will be available after the repository is cloned during install."))
+	if cloneErr != "" {
+		b.WriteString(styles.WarningStyle.Render("Failed to clone dev-agents repository:"))
+		b.WriteString("\n")
+		b.WriteString(styles.WarningStyle.Render(cloneErr))
+		b.WriteString("\n\n")
+		b.WriteString(styles.SubtextStyle.Render("Check your network connection and repository access permissions."))
+		b.WriteString("\n")
+		b.WriteString(styles.SubtextStyle.Render("Press enter to skip or esc to go back."))
+		b.WriteString("\n\n")
+	} else {
+		b.WriteString(styles.SubtextStyle.Render("Toggle agents with space. Press enter to confirm."))
+		b.WriteString("\n\n")
+	}
+
+	if len(agents) == 0 && cloneErr == "" {
+		b.WriteString(styles.SubtextStyle.Render("No agents found in the repository."))
 		b.WriteString("\n\n")
 	}
 

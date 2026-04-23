@@ -227,9 +227,11 @@ type Model struct {
 	DevSkills         []devskills.DiscoveredSkill
 	DevSkillChecked   []bool
 	DevSkillCursor    int
+	DevSkillCloneErr  string
 	DevAgents         []devagents.DiscoveredAgent
 	DevAgentChecked   []bool
 	DevAgentCursor    int
+	DevAgentCloneErr  string
 	Err               error
 
 	// SelectedBackup holds the manifest chosen on ScreenBackups, used by the
@@ -648,9 +650,9 @@ func (m Model) View() string {
 	case ScreenSkillPicker:
 		return screens.RenderSkillPicker(m.SkillPicker, m.Cursor)
 	case ScreenDevSkillPicker:
-		return screens.RenderDevSkillPicker(m.DevSkills, m.DevSkillChecked, m.Cursor)
+		return screens.RenderDevSkillPicker(m.DevSkills, m.DevSkillChecked, m.Cursor, m.DevSkillCloneErr)
 	case ScreenDevAgentPicker:
-		return screens.RenderDevAgentPicker(m.DevAgents, m.DevAgentChecked, m.Cursor)
+		return screens.RenderDevAgentPicker(m.DevAgents, m.DevAgentChecked, m.Cursor, m.DevAgentCloneErr)
 	case ScreenMonday:
 		return screens.RenderMonday(m.MondayTokenInput, m.MondayBoardInput, m.MondayActiveField, mondayCursorPos(m))
 	case ScreenReview:
@@ -2393,6 +2395,7 @@ func (m *Model) initDevSkillPicker() {
 	if len(m.DevSkills) > 0 {
 		return // already initialized, preserve selections
 	}
+	m.DevSkillCloneErr = ""
 	homeDir, _ := os.UserHomeDir()
 	if homeDir == "" {
 		return
@@ -2401,7 +2404,10 @@ func (m *Model) initDevSkillPicker() {
 
 	// Clone the repo if not already present so skills can be discovered.
 	if _, err := os.Stat(repoDir); os.IsNotExist(err) {
-		_ = devskills.Clone(devskills.DefaultRepoURL, repoDir)
+		if cloneErr := devskills.Clone(devskills.DefaultRepoURL, repoDir); cloneErr != nil {
+			m.DevSkillCloneErr = cloneErr.Error()
+			return
+		}
 	}
 
 	discovered, err := devskills.DiscoverSkills(repoDir)
@@ -2422,6 +2428,7 @@ func (m *Model) initDevAgentPicker() {
 	if len(m.DevAgents) > 0 {
 		return // already initialized, preserve selections
 	}
+	m.DevAgentCloneErr = ""
 	homeDir, _ := os.UserHomeDir()
 	if homeDir == "" {
 		return
@@ -2430,7 +2437,10 @@ func (m *Model) initDevAgentPicker() {
 
 	// Clone the repo if not already present so agents can be discovered.
 	if _, err := os.Stat(repoDir); os.IsNotExist(err) {
-		_ = devagents.Clone(devagents.DefaultRepoURL, repoDir)
+		if cloneErr := devagents.Clone(devagents.DefaultRepoURL, repoDir); cloneErr != nil {
+			m.DevAgentCloneErr = cloneErr.Error()
+			return
+		}
 	}
 
 	discovered, err := devagents.DiscoverAgents(repoDir)
