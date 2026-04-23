@@ -61,6 +61,16 @@ go install ./cmd/informa-wizard
 
 ---
 
+## Update
+
+```bash
+cd informa-wizard
+git pull
+go install ./cmd/informa-wizard
+```
+
+---
+
 ### After install: execute wizard
 
 ```bash
