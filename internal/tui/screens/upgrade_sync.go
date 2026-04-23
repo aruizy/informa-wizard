@@ -16,7 +16,7 @@ import (
 //  2. operationRunning && (upgradeReport != nil || upgradeErr != nil) → "Syncing configurations..." with spinner
 //  3. !operationRunning && (upgradeReport != nil || upgradeErr != nil) → show combined results
 //  4. Otherwise → show confirmation screen
-func RenderUpgradeSync(results []update.UpdateResult, upgradeReport *upgrade.UpgradeReport, syncFilesChanged int, upgradeErr error, syncErr error, operationRunning bool, updateCheckDone bool, cursor int, spinnerFrame int) string {
+func RenderUpgradeSync(results []update.UpdateResult, upgradeReport *upgrade.UpgradeReport, syncFilesChanged int, upgradeErr error, syncErr error, operationRunning bool, updateCheckDone bool, cursor int, spinnerFrame int, wizardNeedsRestart bool) string {
 	var b strings.Builder
 
 	b.WriteString(styles.TitleStyle.Render("Update + Sync"))
@@ -48,6 +48,13 @@ func RenderUpgradeSync(results []update.UpdateResult, upgradeReport *upgrade.Upg
 	// Triggered when not running and either upgrade report or upgrade error is present.
 	if !operationRunning && (upgradeReport != nil || upgradeErr != nil) {
 		b.WriteString(renderUpgradeSyncResult(upgradeReport, syncFilesChanged, upgradeErr, syncErr))
+		if wizardNeedsRestart {
+			b.WriteString("\n")
+			b.WriteString(styles.WarningStyle.Render("Informa Wizard has been updated. Restart to apply changes."))
+			b.WriteString("\n\n")
+			b.WriteString(styles.HeadingStyle.Render("Press 'r' to rebuild and restart, or esc to go back."))
+			b.WriteString("\n")
+		}
 		return b.String()
 	}
 

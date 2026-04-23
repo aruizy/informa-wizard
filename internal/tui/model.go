@@ -97,8 +97,9 @@ type SyncDoneMsg struct {
 // finishes (before the sync phase begins). This enables the intermediate "sync
 // running" state to be displayed.
 type UpgradePhaseCompletedMsg struct {
-	Report upgrade.UpgradeReport
-	Err    error
+	Report         upgrade.UpgradeReport
+	Err            error
+	WizardUpdated  bool // true when informa-wizard repo had new commits after pull
 }
 
 // AgentBuilderGeneratedMsg is sent when the AI generation goroutine completes.
@@ -337,6 +338,10 @@ type Model struct {
 	// It distinguishes "sync hasn't run yet" (false) from "sync ran with 0 changes" (true, filesChanged=0).
 	HasSyncRun bool
 
+	// WizardNeedsRestart is true when the informa-wizard repo had new commits
+	// after git pull, requiring go install + restart to apply the update.
+	WizardNeedsRestart bool
+
 	// UpgradeErr holds the error from the last upgrade run (nil on success).
 	UpgradeErr error
 
@@ -492,6 +497,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			report := msg.Report
 			m.UpgradeReport = &report
 		}
+		m.WizardNeedsRestart = msg.WizardUpdated
 		m.UpdateResults = nil
 		m.UpdateCheckDone = false
 		return m, nil
@@ -630,7 +636,7 @@ func (m Model) View() string {
 	case ScreenProfileDelete:
 		return screens.RenderProfileDelete(m.ProfileDeleteTarget, m.Cursor)
 	case ScreenUpgradeSync:
-		return screens.RenderUpgradeSync(m.UpdateResults, m.UpgradeReport, m.SyncFilesChanged, m.UpgradeErr, m.SyncErr, m.OperationRunning, m.UpdateCheckDone, m.Cursor, m.SpinnerFrame)
+		return screens.RenderUpgradeSync(m.UpdateResults, m.UpgradeReport, m.SyncFilesChanged, m.UpgradeErr, m.SyncErr, m.OperationRunning, m.UpdateCheckDone, m.Cursor, m.SpinnerFrame, m.WizardNeedsRestart)
 	case ScreenDetection:
 		return screens.RenderDetection(m.Detection, m.Cursor)
 	case ScreenAgents:
@@ -872,6 +878,10 @@ func (m Model) handleKeyPress(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "r":
+		// Restart: rebuild and restart the wizard after an update.
+		if m.Screen == ScreenUpgradeSync && m.WizardNeedsRestart && !m.OperationRunning {
+			return m, restartWizardCmd()
+		}
 		// Rename: only when on ScreenBackups and cursor is on a backup item (not "Back").
 		if m.Screen == ScreenBackups && m.Cursor < len(m.Backups) {
 			m.SelectedBackup = m.Backups[m.Cursor]
@@ -1016,6 +1026,7 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			m.setScreen(ScreenWelcome)
 			return m, nil
 		}
+
 		// Start upgrade+sync.
 		m.OperationRunning = true
 		m.OperationMode = "upgrade-sync"
@@ -1738,23 +1749,27 @@ func (m Model) startUpgradeSync() tea.Cmd {
 	syncFn := m.SyncFn
 
 	pullCmd := func() tea.Msg {
-		// Pull and rebuild informa-wizard from the persisted source directory.
+		wizardUpdated := false
+
+		// Pull informa-wizard from the persisted source directory.
 		home := homeDir()
 		if home != "" {
 			sourceDirFile := filepath.Join(home, ".informa-wizard", "source-dir")
 			if data, err := os.ReadFile(sourceDirFile); err == nil {
 				repoDir := strings.TrimSpace(string(data))
 				if _, err := os.Stat(filepath.Join(repoDir, ".git")); err == nil {
+					// Check current HEAD before pull.
+					headBefore := gitHead(repoDir)
 					_ = devskills.Pull(repoDir)
-					goInstall := exec.Command("go", "install", "./cmd/informa-wizard")
-					goInstall.Dir = repoDir
-					_ = goInstall.Run()
+					headAfter := gitHead(repoDir)
+					if headBefore != "" && headAfter != "" && headBefore != headAfter {
+						wizardUpdated = true
+					}
 				}
 			}
 		}
 
 		// Pull dev-skills and dev-agents repos (skip silently if absent).
-		home = homeDir()
 		if home != "" {
 			devSkillsDir := filepath.Join(home, ".informa-wizard", "dev-skills")
 			if _, err := os.Stat(devSkillsDir); err == nil {
@@ -1766,7 +1781,7 @@ func (m Model) startUpgradeSync() tea.Cmd {
 			}
 		}
 
-		return UpgradePhaseCompletedMsg{}
+		return UpgradePhaseCompletedMsg{WizardUpdated: wizardUpdated}
 	}
 
 	syncCmd := func() tea.Msg {
@@ -3013,6 +3028,49 @@ func homeDir() string {
 		return h
 	}
 	return "/tmp"
+}
+
+// gitHead returns the current HEAD commit hash for the repo at dir, or "" on failure.
+func gitHead(dir string) string {
+	cmd := exec.Command("git", "-C", dir, "rev-parse", "HEAD")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// restartWizardCmd runs `go install` on the wizard source then re-launches the binary.
+func restartWizardCmd() tea.Cmd {
+	return func() tea.Msg {
+		home := homeDir()
+		sourceDirFile := filepath.Join(home, ".informa-wizard", "source-dir")
+		data, err := os.ReadFile(sourceDirFile)
+		if err != nil {
+			return SyncDoneMsg{Err: fmt.Errorf("cannot find wizard source dir: %w", err)}
+		}
+		repoDir := strings.TrimSpace(string(data))
+
+		// Rebuild the binary.
+		goInstall := exec.Command("go", "install", "./cmd/informa-wizard")
+		goInstall.Dir = repoDir
+		if out, installErr := goInstall.CombinedOutput(); installErr != nil {
+			return SyncDoneMsg{Err: fmt.Errorf("go install failed: %s", string(out))}
+		}
+
+		// Re-launch the wizard. Exec replaces the current process.
+		exe, err := exec.LookPath("informa-wizard")
+		if err != nil {
+			return SyncDoneMsg{Err: fmt.Errorf("cannot find rebuilt binary: %w", err)}
+		}
+		// Use syscall.Exec on Unix; on Windows, start a new process and exit.
+		cmd := exec.Command(exe)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		_ = cmd.Start()
+		return tea.Quit()
+	}
 }
 
 // buildInstalledAgentIDs returns the list of AgentIDs from the adapter list.
