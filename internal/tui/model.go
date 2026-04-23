@@ -490,6 +490,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		} // else keep existing list
 		return m, nil
+	case RestartDoneMsg:
+		// go install completed — exit cleanly so user can re-run.
+		fmt.Fprintln(os.Stderr, "\n✓ Wizard rebuilt successfully. Run 'informa-wizard' to start the updated version.")
+		return m, tea.Quit
 	case UpgradePhaseCompletedMsg:
 		// Pull phase done; sync phase is about to start (OperationRunning stays true).
 		m.UpgradeErr = msg.Err
@@ -3043,7 +3047,8 @@ func gitHead(dir string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// restartWizardCmd runs `go install` on the wizard source then re-launches the binary.
+// restartWizardCmd runs `go install` on the wizard source then exits.
+// The user re-runs informa-wizard to get the updated version.
 func restartWizardCmd() tea.Cmd {
 	return func() tea.Msg {
 		home := homeDir()
@@ -3061,20 +3066,13 @@ func restartWizardCmd() tea.Cmd {
 			return SyncDoneMsg{Err: fmt.Errorf("go install failed: %s", string(out))}
 		}
 
-		// Re-launch the wizard. Exec replaces the current process.
-		exe, err := exec.LookPath("informa-wizard")
-		if err != nil {
-			return SyncDoneMsg{Err: fmt.Errorf("cannot find rebuilt binary: %w", err)}
-		}
-		// Use syscall.Exec on Unix; on Windows, start a new process and exit.
-		cmd := exec.Command(exe)
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		_ = cmd.Start()
-		return tea.Quit()
+		// Signal success — the Quit handler prints a message telling the user to re-run.
+		return RestartDoneMsg{}
 	}
 }
+
+// RestartDoneMsg signals that go install completed and the wizard should exit.
+type RestartDoneMsg struct{}
 
 // buildInstalledAgentIDs returns the list of AgentIDs from the adapter list.
 func buildInstalledAgentIDs(adapters []agentbuilder.AdapterInfo) []model.AgentID {

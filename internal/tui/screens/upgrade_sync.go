@@ -50,9 +50,7 @@ func RenderUpgradeSync(results []update.UpdateResult, upgradeReport *upgrade.Upg
 		b.WriteString(renderUpgradeSyncResult(upgradeReport, syncFilesChanged, upgradeErr, syncErr))
 		if wizardNeedsRestart {
 			b.WriteString("\n")
-			b.WriteString(styles.WarningStyle.Render("Informa Wizard has been updated. Restart to apply changes."))
-			b.WriteString("\n\n")
-			b.WriteString(styles.HeadingStyle.Render("Press 'r' to rebuild and restart, or esc to go back."))
+			b.WriteString(styles.WarningStyle.Render("New version available! Press 'r' to rebuild and apply the update."))
 			b.WriteString("\n")
 		}
 		return b.String()
