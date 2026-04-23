@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/devskills"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/engram"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/mcp"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/monday"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/permissions"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/sdd"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/skills"
@@ -559,6 +561,28 @@ func (s componentSyncStep) Run() error {
 				return fmt.Errorf("sync theme for %q: %w", adapter.Agent(), err)
 			}
 			s.countChanged(boolToInt(res.Changed))
+		}
+		return nil
+
+	case model.ComponentMonday:
+		// Monday sync: re-inject MCP from persisted config.
+		mondayPath := filepath.Join(s.homeDir, ".informa-wizard", "monday.json")
+		data, readErr := os.ReadFile(mondayPath)
+		if readErr != nil {
+			// No monday.json — skip silently (not configured yet).
+			return nil
+		}
+		var mondayCfg struct {
+			Token   string `json:"token"`
+			BoardID string `json:"board_id"`
+		}
+		if json.Unmarshal(data, &mondayCfg) != nil || mondayCfg.Token == "" {
+			return nil
+		}
+		for _, adapter := range adapters {
+			if _, err := monday.Inject(s.homeDir, adapter, model.MondayConfig{Token: mondayCfg.Token, BoardID: mondayCfg.BoardID}); err != nil {
+				return fmt.Errorf("sync monday for %q: %w", adapter.Agent(), err)
+			}
 		}
 		return nil
 
