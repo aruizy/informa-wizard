@@ -49,6 +49,8 @@ sudo apt install golang  # or your package manager
 
 Verify: `go version`
 
+> **Important:** Use the stable version of VS Code, not VS Code Insiders. The Insiders build may have compatibility issues with the wizard's agent and MCP configuration.
+
 ---
 
 ## Install
