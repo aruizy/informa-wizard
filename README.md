@@ -71,6 +71,55 @@ informa-wizard
 
 ---
 
+## Installation Walkthrough
+
+<details>
+<summary><strong>Click to view the installation flow screenshots</strong></summary>
+
+**1. Welcome menu**
+
+![Welcome](docs/images/01-welcome.png)
+
+**2. System detection** — checks tools, dependencies, and which agent configs are present
+
+![System Detection](docs/images/02-detection.png)
+
+**3. Select AI agents** — pick the agents to configure
+
+![Select AI Agents](docs/images/03-agents.png)
+
+**4. Select ecosystem preset** — Full, Ecosystem or Custom
+
+![Select Preset](docs/images/04-preset.png)
+
+**5. Strict TDD mode**
+
+![Strict TDD](docs/images/05-strict-tdd.png)
+
+**6. Configure Claude models** — assign models per SDD phase
+
+![Claude Models](docs/images/06-claude-models.png)
+
+**7. Select skills** — pick the curated coding skills to install
+
+![Select Skills](docs/images/07-skills.png)
+
+**8. Select dev-skills** — external skills from the shared dev-skills repo
+
+![Select Dev Skills](docs/images/08-dev-skills.png)
+
+**9. Select dev-agents** — external orchestrator agents from dev-orchestrators
+
+![Select Dev Agents](docs/images/09-dev-agents.png)
+
+**10. Review and confirm** — final summary before installing
+
+![Review and Confirm](docs/images/10-review.png)
+
+</details>
+
+---
+
 ### After wizard install: project-level setup
 
 Once your agents are configured, open your AI agent in a project and run these two commands to register the project context:

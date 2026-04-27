@@ -71,6 +71,55 @@ informa-wizard
 
 ---
 
+## Recorrido por la instalación
+
+<details>
+<summary><strong>Haz click para ver las capturas del flujo de instalación</strong></summary>
+
+**1. Menú principal**
+
+![Welcome](docs/images/01-welcome.png)
+
+**2. Detección del sistema** — comprueba herramientas, dependencias y qué configuraciones de agente están presentes
+
+![System Detection](docs/images/02-detection.png)
+
+**3. Selección de agentes** — elige los agentes a configurar
+
+![Select AI Agents](docs/images/03-agents.png)
+
+**4. Selección de preset** — Full, Ecosystem o Custom
+
+![Select Preset](docs/images/04-preset.png)
+
+**5. Modo Strict TDD**
+
+![Strict TDD](docs/images/05-strict-tdd.png)
+
+**6. Configurar modelos de Claude** — asigna modelos por fase del SDD
+
+![Claude Models](docs/images/06-claude-models.png)
+
+**7. Selección de skills** — elige las skills curadas a instalar
+
+![Select Skills](docs/images/07-skills.png)
+
+**8. Selección de dev-skills** — skills externas del repo compartido dev-skills
+
+![Select Dev Skills](docs/images/08-dev-skills.png)
+
+**9. Selección de dev-agents** — agentes orquestadores del repo dev-orchestrators
+
+![Select Dev Agents](docs/images/09-dev-agents.png)
+
+**10. Revisar y confirmar** — resumen final antes de instalar
+
+![Review and Confirm](docs/images/10-review.png)
+
+</details>
+
+---
+
 ### Tras instalar el wizard: configuración a nivel de proyecto
 
 Una vez configurados tus agentes, abre tu agente de IA en un proyecto y ejecuta estos dos comandos para registrar el contexto del proyecto:
