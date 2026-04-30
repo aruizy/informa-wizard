@@ -769,6 +769,7 @@ func (m Model) handleKeyPress(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			if updated != nil {
 				m.Selection.ClaudeModelAssignments = updated
+				m.Selection.ClaudeModelPreset = string(m.ClaudeModelPicker.Preset)
 				// In ModelConfigMode, persist model assignments via sync.
 				if m.ModelConfigMode {
 					m.ModelConfigMode = false

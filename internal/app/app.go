@@ -263,7 +263,7 @@ func tuiExecute(
 			skillIDs = append(skillIDs, string(s))
 		}
 		// Non-fatal: a state write failure must not break an otherwise successful install.
-		_ = state.Write(homeDir, agentIDs, componentIDs, skillIDs, string(selection.Preset))
+		_ = state.Write(homeDir, agentIDs, componentIDs, skillIDs, string(selection.Preset), string(selection.ClaudeModelPreset))
 
 		// Persist source repo dir for Update+Sync.
 		if wd, wdErr := os.Getwd(); wdErr == nil {

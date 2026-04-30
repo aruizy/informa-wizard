@@ -12,7 +12,7 @@ func TestWriteAndRead(t *testing.T) {
 	home := t.TempDir()
 	agents := []string{"claude-code", "opencode"}
 
-	if err := Write(home, agents, nil); err != nil {
+	if err := Write(home, agents, nil, nil, "", ""); err != nil {
 		t.Fatalf("Write() error = %v", err)
 	}
 
@@ -31,7 +31,7 @@ func TestWriteAndRead(t *testing.T) {
 func TestWriteCreatesStateDir(t *testing.T) {
 	home := t.TempDir()
 
-	if err := Write(home, []string{"opencode"}, nil); err != nil {
+	if err := Write(home, []string{"opencode"}, nil, nil, "", ""); err != nil {
 		t.Fatalf("Write() error = %v", err)
 	}
 
@@ -87,11 +87,11 @@ func TestReadCorrupt(t *testing.T) {
 func TestWriteOverwrite(t *testing.T) {
 	home := t.TempDir()
 
-	if err := Write(home, []string{"claude-code"}, nil); err != nil {
+	if err := Write(home, []string{"claude-code"}, nil, nil, "", ""); err != nil {
 		t.Fatalf("Write() first error = %v", err)
 	}
 
-	if err := Write(home, []string{"opencode", "gemini-cli"}, nil); err != nil {
+	if err := Write(home, []string{"opencode", "gemini-cli"}, nil, nil, "", ""); err != nil {
 		t.Fatalf("Write() second error = %v", err)
 	}
 
@@ -112,7 +112,7 @@ func TestWriteAndReadWithComponents(t *testing.T) {
 	agents := []string{"claude-code"}
 	components := []string{"sdd", "engram", "skills"}
 
-	if err := Write(home, agents, components); err != nil {
+	if err := Write(home, agents, components, nil, "", ""); err != nil {
 		t.Fatalf("Write() error = %v", err)
 	}
 
@@ -131,7 +131,7 @@ func TestWriteAndReadWithComponents(t *testing.T) {
 func TestWriteEmptyComponentsRoundTrips(t *testing.T) {
 	home := t.TempDir()
 
-	if err := Write(home, []string{"claude-code"}, []string{}); err != nil {
+	if err := Write(home, []string{"claude-code"}, []string{}, nil, "", ""); err != nil {
 		t.Fatalf("Write() error = %v", err)
 	}
 
@@ -152,7 +152,7 @@ func TestWriteEmptyComponentsRoundTrips(t *testing.T) {
 func TestWriteEmptyAgents(t *testing.T) {
 	home := t.TempDir()
 
-	if err := Write(home, []string{}, nil); err != nil {
+	if err := Write(home, []string{}, nil, nil, "", ""); err != nil {
 		t.Fatalf("Write() error = %v", err)
 	}
 

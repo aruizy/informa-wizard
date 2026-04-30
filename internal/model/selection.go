@@ -16,6 +16,7 @@ type Selection struct {
 	StrictTDD              bool
 	ModelAssignments       map[string]ModelAssignment  // key = sub-agent name (e.g., "sdd-init")
 	ClaudeModelAssignments map[string]ClaudeModelAlias // key = phase name; value = opus|sonnet|haiku
+	ClaudeModelPreset      string                      // balanced|performance|economy|custom
 	Profiles               []Profile                   // named SDD profiles to generate/update during sync
 	Monday                 MondayConfig                // Monday.com integration config
 	DevSkillSelections     []string                    // individual skill IDs selected for dev-skills component

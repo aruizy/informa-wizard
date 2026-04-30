@@ -11,10 +11,11 @@ const stateFile = "state.json"
 
 // InstallState holds the persisted user selections from the last install run.
 type InstallState struct {
-	InstalledAgents     []string `json:"installed_agents"`
-	InstalledComponents []string `json:"installed_components"`
-	InstalledSkills     []string `json:"installed_skills,omitempty"`
-	InstalledPreset     string   `json:"installed_preset,omitempty"`
+	InstalledAgents      []string `json:"installed_agents"`
+	InstalledComponents  []string `json:"installed_components"`
+	InstalledSkills      []string `json:"installed_skills,omitempty"`
+	InstalledPreset      string   `json:"installed_preset,omitempty"`
+	InstalledClaudePreset string  `json:"installed_claude_preset,omitempty"`
 }
 
 // Path returns the absolute path to the state file for the given home directory.
@@ -37,16 +38,17 @@ func Read(homeDir string) (InstallState, error) {
 }
 
 // Write persists the install state.
-func Write(homeDir string, agents, components, skills []string, preset string) error {
+func Write(homeDir string, agents, components, skills []string, preset string, claudePreset string) error {
 	dir := filepath.Join(homeDir, stateDir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 	s := InstallState{
-		InstalledAgents:     agents,
-		InstalledComponents: components,
-		InstalledSkills:     skills,
-		InstalledPreset:     preset,
+		InstalledAgents:       agents,
+		InstalledComponents:   components,
+		InstalledSkills:       skills,
+		InstalledPreset:       preset,
+		InstalledClaudePreset: claudePreset,
 	}
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {

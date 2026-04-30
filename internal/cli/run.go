@@ -157,7 +157,7 @@ func RunInstall(args []string, detection system.DetectionResult) (InstallResult,
 		skillIDs = append(skillIDs, string(s))
 	}
 	// Non-fatal: a state write failure must not break an otherwise successful install.
-	_ = state.Write(homeDir, agentIDs, componentIDs, skillIDs, string(input.Selection.Preset))
+	_ = state.Write(homeDir, agentIDs, componentIDs, skillIDs, string(input.Selection.Preset), string(input.Selection.ClaudeModelPreset))
 
 	// Persist the source repo directory so Update+Sync can find it for git pull + go install.
 	if wd, wdErr := os.Getwd(); wdErr == nil {

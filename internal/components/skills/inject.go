@@ -57,25 +57,39 @@ func Inject(homeDir string, adapter agents.Adapter, skillIDs []model.SkillID) (I
 			continue
 		}
 
-		assetPath := "skills/" + string(id) + "/SKILL.md"
-		content, readErr := assets.Read(assetPath)
-		if readErr != nil {
-			log.Printf("skills: skipping %q — embedded asset not found: %v", id, readErr)
+		assetDir := "skills/" + string(id)
+		entries, readDirErr := assets.FS.ReadDir(assetDir)
+		if readDirErr != nil {
+			log.Printf("skills: skipping %q — embedded directory not found: %v", id, readDirErr)
 			skipped = append(skipped, id)
 			continue
 		}
-		if len(content) == 0 {
-			return InjectionResult{}, fmt.Errorf("skill %q: embedded asset exists but is empty — build may be corrupt", id)
-		}
 
-		path := filepath.Join(skillDir, string(id), "SKILL.md")
-		writeResult, writeErr := filemerge.WriteFileAtomic(path, []byte(content), 0o644)
-		if writeErr != nil {
-			return InjectionResult{}, fmt.Errorf("skill %q: write failed: %w", id, writeErr)
-		}
+		destDir := filepath.Join(skillDir, string(id))
 
-		changed = changed || writeResult.Changed
-		paths = append(paths, path)
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+
+			assetPath := assetDir + "/" + entry.Name()
+			data, readErr := assets.FS.ReadFile(assetPath)
+			if readErr != nil {
+				return InjectionResult{}, fmt.Errorf("skill %q: read file %q failed: %w", id, entry.Name(), readErr)
+			}
+			if len(data) == 0 && entry.Name() == "SKILL.md" {
+				return InjectionResult{}, fmt.Errorf("skill %q: SKILL.md exists but is empty — build may be corrupt", id)
+			}
+
+			path := filepath.Join(destDir, entry.Name())
+			writeResult, writeErr := filemerge.WriteFileAtomic(path, data, 0o644)
+			if writeErr != nil {
+				return InjectionResult{}, fmt.Errorf("skill %q: write %q failed: %w", id, entry.Name(), writeErr)
+			}
+
+			changed = changed || writeResult.Changed
+			paths = append(paths, path)
+		}
 	}
 
 	return InjectionResult{Changed: changed, Files: paths, Skipped: skipped}, nil

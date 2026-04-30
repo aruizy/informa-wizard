@@ -34,6 +34,13 @@ func RunStatus(homeDir string) error {
 		preset = "(none)"
 	}
 	fmt.Printf("Preset: %s\n", preset)
+
+	// Claude model preset
+	claudePreset := s.InstalledClaudePreset
+	if claudePreset == "" {
+		claudePreset = "(none)"
+	}
+	fmt.Printf("Claude model preset: %s\n", claudePreset)
 	fmt.Println()
 
 	// Agents

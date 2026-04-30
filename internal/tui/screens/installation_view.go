@@ -29,6 +29,14 @@ func RenderInstallationView(data InstallationViewData) string {
 		b.WriteString("\n  " + data.State.InstalledPreset + "\n\n")
 	}
 
+	// Claude Model Preset
+	claudePreset := data.State.InstalledClaudePreset
+	if claudePreset == "" {
+		claudePreset = "(not configured)"
+	}
+	b.WriteString(styles.HeadingStyle.Render("Claude Model Preset"))
+	b.WriteString("\n  " + claudePreset + "\n\n")
+
 	// Agents
 	b.WriteString(styles.HeadingStyle.Render("Agents"))
 	b.WriteString("\n")

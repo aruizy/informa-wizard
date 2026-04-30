@@ -56,7 +56,7 @@ func UninstallComponent(homeDir string, componentID model.ComponentID) error {
 
 	// Remove the component from the installed list and persist.
 	updated := removeComponent(st.InstalledComponents, string(componentID))
-	return state.Write(homeDir, st.InstalledAgents, updated, st.InstalledSkills, st.InstalledPreset)
+	return state.Write(homeDir, st.InstalledAgents, updated, st.InstalledSkills, st.InstalledPreset, st.InstalledClaudePreset)
 }
 
 // removeIfExists removes a file if it exists; a missing file is not an error.
