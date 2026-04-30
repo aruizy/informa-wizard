@@ -13,6 +13,8 @@ const stateFile = "state.json"
 type InstallState struct {
 	InstalledAgents     []string `json:"installed_agents"`
 	InstalledComponents []string `json:"installed_components"`
+	InstalledSkills     []string `json:"installed_skills,omitempty"`
+	InstalledPreset     string   `json:"installed_preset,omitempty"`
 }
 
 // Path returns the absolute path to the state file for the given home directory.
@@ -34,14 +36,18 @@ func Read(homeDir string) (InstallState, error) {
 	return s, nil
 }
 
-// Write persists the given agent and component IDs to the state file under the given home directory.
-// It creates the .informa-wizard directory if it does not already exist.
-func Write(homeDir string, agents []string, components []string) error {
+// Write persists the install state.
+func Write(homeDir string, agents, components, skills []string, preset string) error {
 	dir := filepath.Join(homeDir, stateDir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	s := InstallState{InstalledAgents: agents, InstalledComponents: components}
+	s := InstallState{
+		InstalledAgents:     agents,
+		InstalledComponents: components,
+		InstalledSkills:     skills,
+		InstalledPreset:     preset,
+	}
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err

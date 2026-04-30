@@ -23,6 +23,7 @@ func WelcomeOptions(hasEngines bool) []string {
 	return []string{
 		"Start installation",
 		"Update + Sync",
+		"View installation",
 		"Configure Monday",
 		"Configure models",
 		agentLabel,

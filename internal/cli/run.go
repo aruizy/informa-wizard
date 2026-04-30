@@ -150,8 +150,14 @@ func RunInstall(args []string, detection system.DetectionResult) (InstallResult,
 	for _, c := range input.Selection.Components {
 		componentIDs = append(componentIDs, string(c))
 	}
+	// Persist the actual skills installed (resolved from selection or preset).
+	resolvedSkills := selectedSkillIDs(input.Selection)
+	skillIDs := make([]string, 0, len(resolvedSkills))
+	for _, s := range resolvedSkills {
+		skillIDs = append(skillIDs, string(s))
+	}
 	// Non-fatal: a state write failure must not break an otherwise successful install.
-	_ = state.Write(homeDir, agentIDs, componentIDs)
+	_ = state.Write(homeDir, agentIDs, componentIDs, skillIDs, string(input.Selection.Preset))
 
 	// Persist the source repo directory so Update+Sync can find it for git pull + go install.
 	if wd, wdErr := os.Getwd(); wdErr == nil {

@@ -245,8 +245,12 @@ func tuiExecute(
 		for _, c := range selection.Components {
 			componentIDs = append(componentIDs, string(c))
 		}
+		skillIDs := make([]string, 0, len(selection.Skills))
+		for _, s := range selection.Skills {
+			skillIDs = append(skillIDs, string(s))
+		}
 		// Non-fatal: a state write failure must not break an otherwise successful install.
-		_ = state.Write(homeDir, agentIDs, componentIDs)
+		_ = state.Write(homeDir, agentIDs, componentIDs, skillIDs, string(selection.Preset))
 
 		// Persist source repo dir for Update+Sync.
 		if wd, wdErr := os.Getwd(); wdErr == nil {

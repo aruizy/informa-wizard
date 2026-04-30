@@ -248,9 +248,10 @@ This prevents progress loss across batches. Read-merge-write is mandatory for co
 When the Monday component is installed (`monday_board_id` is available from project config or user input), the orchestrator MUST pass Monday context to `sdd-tasks`, `sdd-apply`, and `sdd-verify` phases.
 
 At session start (or first SDD command), resolve the Monday board ID:
-1. Check `.informa-wizard/monday.json` in the workspace root for `{"board_id": "..."}`, OR
-2. Ask the user: "¿Tienes un board ID de Monday para esta sesión?"
-3. If neither available, skip Monday integration entirely.
+1. Check `.informa-wizard/monday.json` in the workspace root for project-specific config, OR
+2. Check `~/.informa-wizard/monday.json` (global wizard config) for `{"token": "...", "board_id": "..."}`, OR
+3. Ask the user: "¿Tienes un board ID de Monday para esta sesión?"
+4. If none of the above, skip Monday integration entirely.
 
 When running phases with Monday context:
 - `sdd-tasks`: After creating the task breakdown, search Monday for an existing item matching the change name. If found, use it. If not, create a new item with subtasks.

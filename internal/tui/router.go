@@ -22,6 +22,7 @@ var linearRoutes = map[Screen]Route{
 	ScreenInstalling:             {Forward: ScreenComplete, Backward: ScreenReview},
 	ScreenComplete:               {Backward: ScreenInstalling},
 	ScreenBackups:                {Backward: ScreenWelcome},
+	ScreenInstallationView:       {Backward: ScreenWelcome},
 	ScreenRestoreConfirm:         {Backward: ScreenBackups},
 	ScreenRestoreResult:          {Backward: ScreenBackups},
 	ScreenDeleteConfirm:          {Backward: ScreenBackups},
