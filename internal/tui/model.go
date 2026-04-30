@@ -880,8 +880,8 @@ func (m Model) handleKeyPress(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.toggleCurrentDevAgent()
 		}
 		return m, nil
-	case "r":
-		// Restart: rebuild and restart the wizard after an update.
+	case "r", "y", "Y":
+		// Restart: rebuild and exit the wizard after an update.
 		if m.Screen == ScreenUpgradeSync && m.WizardNeedsRestart && !m.OperationRunning {
 			return m, restartWizardCmd()
 		}
@@ -1022,6 +1022,10 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 		// Guard: don't re-launch while running.
 		if m.OperationRunning {
 			return m, nil
+		}
+		// Wizard update available — Enter triggers rebuild + exit.
+		if m.WizardNeedsRestart {
+			return m, restartWizardCmd()
 		}
 		// If operations are done, return to welcome.
 		if m.HasSyncRun || m.UpgradeReport != nil || m.UpgradeErr != nil {
