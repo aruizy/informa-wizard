@@ -174,14 +174,29 @@ func allEnvVarsSet(envVars []string) bool {
 	return true
 }
 
+// deprecatedAnthropicModels are model IDs that the Anthropic API no longer
+// accepts. They may still appear in cached model catalogs but cannot be used.
+var deprecatedAnthropicModels = map[string]bool{
+	"claude-sonnet-4-5":          true,
+	"claude-sonnet-4-5-20250929": true,
+	"claude-opus-4-5":            true,
+	"claude-opus-4-5-20250929":   true,
+	"claude-haiku-4-5":           true,
+	"claude-haiku-4-5-20250929":  true,
+}
+
 // FilterModelsForSDD returns models from a provider that support tool_call (required for SDD phases).
-// Results are sorted by model name.
+// Results are sorted by model name. Deprecated models are excluded.
 func FilterModelsForSDD(provider Provider) []Model {
 	var models []Model
 	for _, m := range provider.Models {
-		if m.ToolCall {
-			models = append(models, m)
+		if !m.ToolCall {
+			continue
 		}
+		if deprecatedAnthropicModels[m.ID] {
+			continue
+		}
+		models = append(models, m)
 	}
 
 	sort.Slice(models, func(i, j int) bool {
