@@ -2526,14 +2526,18 @@ func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.KeyRunes:
-		// 's' toggles save scope from any field.
-		if len(msg.Runes) == 1 && msg.Runes[0] == 's' {
-			if m.MondaySaveScope == "workspace" {
-				m.MondaySaveScope = "global"
-			} else {
-				m.MondaySaveScope = "workspace"
+		// 's' toggles save scope ONLY when the scope field is active,
+		// otherwise it's a normal character typed into Token/Board.
+		if m.MondayActiveField == screens.MondayFieldScope {
+			if len(msg.Runes) == 1 && (msg.Runes[0] == 's' || msg.Runes[0] == ' ') {
+				if m.MondaySaveScope == "workspace" {
+					m.MondaySaveScope = "global"
+				} else {
+					m.MondaySaveScope = "workspace"
+				}
+				return m, nil
 			}
-			return m, nil
+			return m, nil // ignore other keys on scope field
 		}
 		m.MondayValidationErr = nil
 		if m.MondayActiveField == screens.MondayFieldToken {

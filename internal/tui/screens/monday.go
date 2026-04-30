@@ -81,7 +81,7 @@ func RenderMonday(token, boardID string, activeField MondayField, cursorPos int,
 		b.WriteString("\n\n")
 	}
 
-	b.WriteString(styles.HelpStyle.Render("tab: switch field • s: toggle scope • enter: continue • esc: back"))
+	b.WriteString(styles.HelpStyle.Render("tab: next field • space: toggle scope (when on Save to) • enter: continue • esc: back"))
 
 	return b.String()
 }
