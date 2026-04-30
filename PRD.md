@@ -369,7 +369,7 @@ The Gentleman persona is the heart of this ecosystem, but it's **100% optional**
 
 | Persona Option | Description | What it Configures |
 |---------------|-------------|-------------------|
-| **Gentleman Mode** | "Your own Gentleman!" — The Senior Architect mentor who teaches, challenges, and pushes you to understand concepts before code. Rioplatense Spanish for Spanish input, direct English otherwise. Uses Tony Stark/Jarvis analogies. | Full persona in CLAUDE.md / opencode agents / .cursorrules, custom thinking verbs, teaching-first behavior |
+| **Gentleman Mode** | "Your own Gentleman!" — The Senior Architect mentor who teaches, challenges, and pushes you to understand concepts before code. Castilian Spanish for Spanish input, direct English otherwise. Uses Tony Stark/Jarvis analogies. | Full persona in CLAUDE.md / opencode agents / .cursorrules, custom thinking verbs, teaching-first behavior |
 | **Neutral Mode** | Professional, helpful, no personality overlay. The agent stays with its default behavior. | Security permissions only, no persona injection |
 | **Custom Persona** | Bring your own! User provides a persona description or selects from community presets. | User-provided text injected into agent instructions |
 
@@ -381,7 +381,7 @@ The Gentleman persona is the heart of this ecosystem, but it's **100% optional**
 | Permissions | Security-first defaults: deny .env, ask on destructive git ops, allow standard tools |
 | Editor mode | vim / emacs / default |
 | Statusline | Custom statusline with model info, git status, context usage (Claude Code) |
-| Thinking verbs | Custom spinner text — Rioplatense phrases like "Tomando un Cafecito mientras Pienso" (only with Gentleman persona) |
+| Thinking verbs | Custom spinner text — Castilian phrases like "Tomando un Cafecito mientras Pienso" (only with Gentleman persona) |
 | Keybindings | Vim-style or default |
 
 **Requirements:**
@@ -391,7 +391,7 @@ The Gentleman persona is the heart of this ecosystem, but it's **100% optional**
 - R-CONFIG-04: Permission defaults MUST follow the security-first model: block .env access, require confirmation for destructive git operations — REGARDLESS of persona choice (security is not optional)
 - R-CONFIG-05: The installer MUST NOT overwrite existing agent configurations without explicit user consent
 - R-CONFIG-06: The installer SHOULD offer to backup existing configs before making changes (same pattern as Gentleman.Dots)
-- R-CONFIG-07: Thinking verbs and Rioplatense expressions MUST only be configured when Gentleman persona is selected
+- R-CONFIG-07: Thinking verbs and Castilian expressions MUST only be configured when Gentleman persona is selected
 - R-CONFIG-08: The installer SHOULD support community-contributed personas in the future (out of scope for v1, but architecture must allow it)
 
 ---
@@ -442,7 +442,7 @@ curl -sL get.gentleman.ai/ai | sh
      │  Choose your Persona             │
      │                                  │
      │  ★ "Your own Gentleman!"         │  ← Senior Architect mentor, teaches,
-     │     The mentor who pushes you     │     challenges, Rioplatense Spanish
+     │     The mentor who pushes you     │     challenges, Castilian Spanish
      │     to understand before coding.  │
      │                                  │
      │  ○ Neutral                       │  ← No persona, default agent behavior
