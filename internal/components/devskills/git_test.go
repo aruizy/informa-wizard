@@ -3,6 +3,7 @@ package devskills
 import (
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 )
 
@@ -22,6 +23,11 @@ func TestMain(m *testing.M) {
 		}
 		os.Exit(exitCode)
 	}
+
+	// Use a single attempt with zero delay in tests to avoid multi-second waits.
+	retryAttempts = 1
+	retryBaseDelay = 0
+
 	os.Exit(m.Run())
 }
 
@@ -59,8 +65,8 @@ func TestClone_Success(t *testing.T) {
 	}
 }
 
-// TestClone_Failure verifies that Clone returns an error containing the git
-// output and the prefix "git clone failed:" when git exits with a non-zero code.
+// TestClone_Failure verifies that Clone returns an error containing "git clone failed:"
+// when git exits with a non-zero code. The error may be wrapped with retry information.
 func TestClone_Failure(t *testing.T) {
 	orig := execCommand
 	t.Cleanup(func() { execCommand = orig })
@@ -70,9 +76,8 @@ func TestClone_Failure(t *testing.T) {
 	if err == nil {
 		t.Fatal("Clone() error = nil, want non-nil")
 	}
-	msg := err.Error()
-	if len(msg) < len("git clone failed:") || msg[:len("git clone failed:")] != "git clone failed:" {
-		t.Errorf("Clone() error = %q, want prefix %q", msg, "git clone failed:")
+	if !strings.Contains(err.Error(), "git clone failed:") {
+		t.Errorf("Clone() error = %q, want to contain %q", err.Error(), "git clone failed:")
 	}
 }
 
@@ -87,8 +92,8 @@ func TestPull_Success(t *testing.T) {
 	}
 }
 
-// TestPull_Failure verifies that Pull returns an error with prefix "git pull failed:"
-// when git exits with a non-zero code.
+// TestPull_Failure verifies that Pull returns an error containing "git pull failed:"
+// when git exits with a non-zero code. The error may be wrapped with retry information.
 func TestPull_Failure(t *testing.T) {
 	orig := execCommand
 	t.Cleanup(func() { execCommand = orig })
@@ -98,8 +103,7 @@ func TestPull_Failure(t *testing.T) {
 	if err == nil {
 		t.Fatal("Pull() error = nil, want non-nil")
 	}
-	msg := err.Error()
-	if len(msg) < len("git pull failed:") || msg[:len("git pull failed:")] != "git pull failed:" {
-		t.Errorf("Pull() error = %q, want prefix %q", msg, "git pull failed:")
+	if !strings.Contains(err.Error(), "git pull failed:") {
+		t.Errorf("Pull() error = %q, want to contain %q", err.Error(), "git pull failed:")
 	}
 }

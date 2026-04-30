@@ -12,6 +12,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/backup"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/cli"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/lock"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/logger"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/pipeline"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/planner"
@@ -30,6 +32,10 @@ var (
 	updateCheckAll      = update.CheckAll
 	updateCheckFiltered = update.CheckFiltered
 	upgradeExecute      = upgrade.Execute
+
+	// lockAcquireFn is the lock acquisition function.
+	// Tests can replace this with a no-op to avoid using the real user home directory.
+	lockAcquireFn = lock.Acquire
 )
 
 func Run() error {
@@ -58,6 +64,30 @@ func RunArgs(args []string, stdout io.Writer) error {
 		return err
 	}
 
+	// Determine the home directory once; used for lock, logger, and TUI.
+	// On failure we continue without locking/logging (non-fatal for these subsystems).
+	homeDir, homeDirErr := os.UserHomeDir()
+
+	// Persistent logging: open ~/.informa-wizard/logs/wizard.log in append mode.
+	// Errors are silently ignored so logging never blocks the user.
+	if homeDirErr == nil {
+		_ = logger.Init(homeDir)
+		defer func() { _ = logger.Close() }()
+	}
+
+	// Lock: prevent two simultaneous wizard instances from stepping on each other.
+	// Read-only commands (status, doctor, help, version) bypass the lock.
+	// If home dir is unavailable, we skip the lock entirely (graceful degradation).
+	isReadOnly := len(args) > 0 && (args[0] == "status" || args[0] == "doctor")
+	if homeDirErr == nil && !isReadOnly {
+		lk, lockErr := lockAcquireFn(homeDir)
+		if lockErr != nil {
+			_, _ = fmt.Fprintf(stdout, "Error: %s\n", lockErr)
+			return fmt.Errorf("%w", lockErr)
+		}
+		defer func() { _ = lk.Release() }()
+	}
+
 	result, err := system.Detect(context.Background())
 	if err != nil {
 		return fmt.Errorf("detect system: %w", err)
@@ -75,9 +105,8 @@ func RunArgs(args []string, stdout io.Writer) error {
 	}
 
 	if len(args) == 0 {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("resolve user home directory: %w", err)
+		if homeDirErr != nil {
+			return fmt.Errorf("resolve user home directory: %w", homeDirErr)
 		}
 
 		m := tui.NewModel(result, Version)
@@ -97,7 +126,7 @@ func RunArgs(args []string, stdout io.Writer) error {
 		m.UpgradeFn = tuiUpgrade(profile, homeDir)
 		m.SyncFn = tuiSync(homeDir)
 		p := tea.NewProgram(m, tea.WithAltScreen())
-		_, err = p.Run()
+		_, err := p.Run()
 		return err
 	}
 
@@ -108,36 +137,40 @@ func RunArgs(args []string, stdout io.Writer) error {
 	case "upgrade":
 		return runUpgrade(context.Background(), args[1:], result, stdout)
 	case "install":
+		logger.Info("install start: args=%v", args[1:])
 		installResult, err := cli.RunInstall(args[1:], result)
 		if err != nil {
+			logger.Error("install failed: %v", err)
 			return err
 		}
 
 		if installResult.DryRun {
 			_, _ = fmt.Fprintln(stdout, cli.RenderDryRun(installResult))
 		} else {
+			logger.Info("install complete: agents=%v components=%v", installResult.Selection.Agents, installResult.Selection.Components)
 			_, _ = fmt.Fprint(stdout, verify.RenderReport(installResult.Verify))
 		}
 
 		return nil
 	case "sync":
+		logger.Info("sync start: args=%v", args[1:])
 		syncResult, err := cli.RunSync(args[1:])
 		if err != nil {
+			logger.Error("sync failed: %v", err)
 			return err
 		}
 
+		logger.Info("sync complete: filesChanged=%d", syncResult.FilesChanged)
 		_, _ = fmt.Fprintln(stdout, cli.RenderSyncReport(syncResult))
 		return nil
 	case "status":
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("resolve user home directory: %w", err)
+		if homeDirErr != nil {
+			return fmt.Errorf("resolve user home directory: %w", homeDirErr)
 		}
 		return cli.RunStatus(homeDir)
 	case "doctor":
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("resolve user home directory: %w", err)
+		if homeDirErr != nil {
+			return fmt.Errorf("resolve user home directory: %w", homeDirErr)
 		}
 		cli.RunHealthCLI(homeDir)
 		return nil
