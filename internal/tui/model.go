@@ -218,6 +218,7 @@ const (
 	ScreenMonday
 	ScreenHealth
 	ScreenUninstall
+	ScreenInstallOverwriteWarn
 )
 
 type Model struct {
@@ -243,11 +244,20 @@ type Model struct {
 	DevSkillChecked   []bool
 	DevSkillCursor    int
 	DevSkillCloneErr  string
+	DevSkillFilter    string
+	DevSkillSearchMode bool
 	DevAgents         []devagents.DiscoveredAgent
 	DevAgentChecked   []bool
 	DevAgentCursor    int
 	DevAgentCloneErr  string
+	DevAgentFilter    string
+	DevAgentSearchMode bool
 	Err               error
+
+	// OverwriteWarnCursor is the cursor position on ScreenInstallOverwriteWarn.
+	OverwriteWarnCursor int
+	// OverwriteWarnState holds the last install state shown on the warning screen.
+	OverwriteWarnState state.InstallState
 
 	// SelectedBackup holds the manifest chosen on ScreenBackups, used by the
 	// restore confirmation and result screens.
@@ -561,6 +571,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.Screen == ScreenProfileCreate && m.ProfileCreateStep == 0 && !m.ProfileEditMode {
 			return m.handleProfileNameInput(msg)
 		}
+		if m.Screen == ScreenDevSkillPicker && m.DevSkillSearchMode {
+			return m.handleDevSkillSearchInput(msg)
+		}
+		if m.Screen == ScreenDevAgentPicker && m.DevAgentSearchMode {
+			return m.handleDevAgentSearchInput(msg)
+		}
 		// Delegate to textarea when on the agent builder prompt screen,
 		// unless the user pressed Esc (to go back) or Tab (to continue).
 		if m.Screen == ScreenAgentBuilderPrompt {
@@ -706,9 +722,11 @@ func (m Model) View() string {
 	case ScreenSkillPicker:
 		return screens.RenderSkillPicker(m.SkillPicker, m.Cursor)
 	case ScreenDevSkillPicker:
-		return screens.RenderDevSkillPicker(m.DevSkills, m.DevSkillChecked, m.Cursor, m.DevSkillCloneErr)
+		return screens.RenderDevSkillPicker(m.DevSkills, m.DevSkillChecked, m.Cursor, m.DevSkillCloneErr, m.DevSkillFilter, m.DevSkillSearchMode)
 	case ScreenDevAgentPicker:
-		return screens.RenderDevAgentPicker(m.DevAgents, m.DevAgentChecked, m.Cursor, m.DevAgentCloneErr)
+		return screens.RenderDevAgentPicker(m.DevAgents, m.DevAgentChecked, m.Cursor, m.DevAgentCloneErr, m.DevAgentFilter, m.DevAgentSearchMode)
+	case ScreenInstallOverwriteWarn:
+		return screens.RenderInstallOverwriteWarn(m.OverwriteWarnState, m.OverwriteWarnCursor)
 	case ScreenMonday:
 		return screens.RenderMonday(m.MondayTokenInput, m.MondayBoardInput, m.MondayActiveField, mondayCursorPos(m), m.MondayValidationErr, m.MondaySaveScope)
 	case ScreenReview:
@@ -934,6 +952,65 @@ func (m Model) handleKeyPress(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.toggleCurrentDevAgent()
 		}
 		return m, nil
+	case "/":
+		// Enter search mode on picker screens.
+		switch m.Screen {
+		case ScreenDevSkillPicker:
+			m.DevSkillSearchMode = true
+			m.Cursor = 0
+			return m, nil
+		case ScreenDevAgentPicker:
+			m.DevAgentSearchMode = true
+			m.Cursor = 0
+			return m, nil
+		}
+	case "a":
+		// Select all items (filtered if filter active).
+		switch m.Screen {
+		case ScreenDevSkillPicker:
+			indices := filteredDevSkills(m)
+			for _, i := range indices {
+				if i < len(m.DevSkillChecked) {
+					m.DevSkillChecked[i] = true
+				}
+			}
+			return m, nil
+		case ScreenDevAgentPicker:
+			indices := filteredDevAgents(m)
+			for _, i := range indices {
+				if i < len(m.DevAgentChecked) {
+					m.DevAgentChecked[i] = true
+				}
+			}
+			return m, nil
+		case ScreenSkillPicker:
+			m.SkillPicker = make([]model.SkillID, len(screens.AllSkillsOrdered()))
+			copy(m.SkillPicker, screens.AllSkillsOrdered())
+			return m, nil
+		}
+	case "A":
+		// Deselect all items (filtered if filter active).
+		switch m.Screen {
+		case ScreenDevSkillPicker:
+			indices := filteredDevSkills(m)
+			for _, i := range indices {
+				if i < len(m.DevSkillChecked) {
+					m.DevSkillChecked[i] = false
+				}
+			}
+			return m, nil
+		case ScreenDevAgentPicker:
+			indices := filteredDevAgents(m)
+			for _, i := range indices {
+				if i < len(m.DevAgentChecked) {
+					m.DevAgentChecked[i] = false
+				}
+			}
+			return m, nil
+		case ScreenSkillPicker:
+			m.SkillPicker = nil
+			return m, nil
+		}
 	case "r", "y", "Y":
 		// Restart: rebuild and exit the wizard after an update.
 		if m.Screen == ScreenUpgradeSync && m.WizardNeedsRestart && !m.OperationRunning {
@@ -1002,7 +1079,15 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 	case ScreenWelcome:
 		switch m.Cursor {
 		case 0:
-			// "Start installation"
+			// "Start installation" — warn if a previous install exists.
+			if home := homeDir(); home != "" {
+				if s, err := state.Read(home); err == nil && len(s.InstalledAgents) > 0 {
+					m.OverwriteWarnState = s
+					m.OverwriteWarnCursor = 0
+					m.setScreen(ScreenInstallOverwriteWarn)
+					break
+				}
+			}
 			m.setScreen(ScreenDetection)
 		case 1:
 			// "Update + Sync"
@@ -1663,6 +1748,19 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 				m.setScreen(ScreenComplete)
 			}
 		}
+	case ScreenInstallOverwriteWarn:
+		switch m.Cursor {
+		case 0:
+			// "Continue (overwrite)" → proceed to detection.
+			m.setScreen(ScreenDetection)
+		case 1:
+			// "View current installation" → show installation summary.
+			m.setScreen(ScreenInstallationView)
+		case 2:
+			// "Back" → return to welcome.
+			m.setScreen(ScreenWelcome)
+		}
+		return m, nil
 	case ScreenComplete:
 		return m, tea.Quit
 	case ScreenInstallationView:
@@ -2002,6 +2100,12 @@ func (m Model) goBack() Model {
 		return m
 	}
 
+	// Overwrite warning: Esc goes back to welcome.
+	if m.Screen == ScreenInstallOverwriteWarn {
+		m.setScreen(ScreenWelcome)
+		return m
+	}
+
 	// Agent builder back navigation.
 	switch m.Screen {
 	case ScreenAgentBuilderComplete:
@@ -2251,6 +2355,15 @@ func (m Model) goBack() Model {
 }
 
 func (m *Model) setScreen(next Screen) {
+	// Clear search/filter state when leaving picker screens.
+	if m.Screen == ScreenDevSkillPicker && next != ScreenDevSkillPicker {
+		m.DevSkillSearchMode = false
+		m.DevSkillFilter = ""
+	}
+	if m.Screen == ScreenDevAgentPicker && next != ScreenDevAgentPicker {
+		m.DevAgentSearchMode = false
+		m.DevAgentFilter = ""
+	}
 	m.PreviousScreen = m.Screen
 	m.Screen = next
 	m.Cursor = 0
@@ -2275,6 +2388,64 @@ func (m *Model) setScreen(next Screen) {
 			m.Cursor = 0
 		}
 	}
+}
+
+// handleDevSkillSearchInput processes key events when DevSkillPicker is in search mode.
+func (m Model) handleDevSkillSearchInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEnter:
+		// Exit search mode, keep filter applied.
+		m.DevSkillSearchMode = false
+		m.Cursor = 0
+		return m, nil
+	case tea.KeyEsc:
+		// Exit search mode and clear filter.
+		m.DevSkillSearchMode = false
+		m.DevSkillFilter = ""
+		m.Cursor = 0
+		return m, nil
+	case tea.KeyBackspace:
+		if len(m.DevSkillFilter) > 0 {
+			runes := []rune(m.DevSkillFilter)
+			m.DevSkillFilter = string(runes[:len(runes)-1])
+			m.Cursor = 0
+		}
+		return m, nil
+	case tea.KeyRunes:
+		m.DevSkillFilter += string(msg.Runes)
+		m.Cursor = 0
+		return m, nil
+	}
+	return m, nil
+}
+
+// handleDevAgentSearchInput processes key events when DevAgentPicker is in search mode.
+func (m Model) handleDevAgentSearchInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEnter:
+		// Exit search mode, keep filter applied.
+		m.DevAgentSearchMode = false
+		m.Cursor = 0
+		return m, nil
+	case tea.KeyEsc:
+		// Exit search mode and clear filter.
+		m.DevAgentSearchMode = false
+		m.DevAgentFilter = ""
+		m.Cursor = 0
+		return m, nil
+	case tea.KeyBackspace:
+		if len(m.DevAgentFilter) > 0 {
+			runes := []rune(m.DevAgentFilter)
+			m.DevAgentFilter = string(runes[:len(runes)-1])
+			m.Cursor = 0
+		}
+		return m, nil
+	case tea.KeyRunes:
+		m.DevAgentFilter += string(msg.Runes)
+		m.Cursor = 0
+		return m, nil
+	}
+	return m, nil
 }
 
 // handleRenameInput processes key events when the rename backup screen is active.
@@ -2475,9 +2646,17 @@ func (m Model) optionCount() int {
 	case ScreenSkillPicker:
 		return screens.SkillPickerOptionCount()
 	case ScreenDevSkillPicker:
+		if m.DevSkillSearchMode || m.DevSkillFilter != "" {
+			return len(filteredDevSkills(m))
+		}
 		return len(m.DevSkills)
 	case ScreenDevAgentPicker:
+		if m.DevAgentSearchMode || m.DevAgentFilter != "" {
+			return len(filteredDevAgents(m))
+		}
 		return len(m.DevAgents)
+	case ScreenInstallOverwriteWarn:
+		return 3 // Continue, View current installation, Back
 	case ScreenMonday:
 		return 0 // text input mode — no cursor navigation
 	case ScreenReview:
@@ -2582,7 +2761,19 @@ func (m *Model) toggleCurrentSkill() {
 }
 
 // toggleCurrentDevSkill toggles the checked state of the dev skill at the current cursor position.
+// When a filter is active, the cursor is relative to the filtered list.
 func (m *Model) toggleCurrentDevSkill() {
+	if m.DevSkillFilter != "" || m.DevSkillSearchMode {
+		indices := filteredDevSkills(*m)
+		if m.Cursor < 0 || m.Cursor >= len(indices) {
+			return
+		}
+		realIdx := indices[m.Cursor]
+		if realIdx < len(m.DevSkillChecked) {
+			m.DevSkillChecked[realIdx] = !m.DevSkillChecked[realIdx]
+		}
+		return
+	}
 	if m.Cursor < 0 || m.Cursor >= len(m.DevSkills) {
 		return
 	}
@@ -2592,13 +2783,69 @@ func (m *Model) toggleCurrentDevSkill() {
 }
 
 // toggleCurrentDevAgent toggles the checked state of the dev agent at the current cursor position.
+// When a filter is active, the cursor is relative to the filtered list.
 func (m *Model) toggleCurrentDevAgent() {
+	if m.DevAgentFilter != "" || m.DevAgentSearchMode {
+		indices := filteredDevAgents(*m)
+		if m.Cursor < 0 || m.Cursor >= len(indices) {
+			return
+		}
+		realIdx := indices[m.Cursor]
+		if realIdx < len(m.DevAgentChecked) {
+			m.DevAgentChecked[realIdx] = !m.DevAgentChecked[realIdx]
+		}
+		return
+	}
 	if m.Cursor < 0 || m.Cursor >= len(m.DevAgents) {
 		return
 	}
 	if m.Cursor < len(m.DevAgentChecked) {
 		m.DevAgentChecked[m.Cursor] = !m.DevAgentChecked[m.Cursor]
 	}
+}
+
+// filteredDevSkills returns the real indices of dev skills that match the current filter.
+// When no filter is active, returns all indices.
+func filteredDevSkills(m Model) []int {
+	if m.DevSkillFilter == "" {
+		indices := make([]int, len(m.DevSkills))
+		for i := range m.DevSkills {
+			indices[i] = i
+		}
+		return indices
+	}
+	query := strings.ToLower(m.DevSkillFilter)
+	var indices []int
+	for i, s := range m.DevSkills {
+		if strings.Contains(strings.ToLower(s.Name), query) ||
+			strings.Contains(strings.ToLower(s.ID), query) ||
+			strings.Contains(strings.ToLower(s.Description), query) {
+			indices = append(indices, i)
+		}
+	}
+	return indices
+}
+
+// filteredDevAgents returns the real indices of dev agents that match the current filter.
+// When no filter is active, returns all indices.
+func filteredDevAgents(m Model) []int {
+	if m.DevAgentFilter == "" {
+		indices := make([]int, len(m.DevAgents))
+		for i := range m.DevAgents {
+			indices[i] = i
+		}
+		return indices
+	}
+	query := strings.ToLower(m.DevAgentFilter)
+	var indices []int
+	for i, a := range m.DevAgents {
+		if strings.Contains(strings.ToLower(a.Name), query) ||
+			strings.Contains(strings.ToLower(a.ID), query) ||
+			strings.Contains(strings.ToLower(a.Description), query) {
+			indices = append(indices, i)
+		}
+	}
+	return indices
 }
 
 // initSkillPicker pre-selects ALL available skills (custom mode default).
