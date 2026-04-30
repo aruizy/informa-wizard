@@ -128,6 +128,12 @@ func RunArgs(args []string, stdout io.Writer) error {
 
 		_, _ = fmt.Fprintln(stdout, cli.RenderSyncReport(syncResult))
 		return nil
+	case "status":
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("resolve user home directory: %w", err)
+		}
+		return cli.RunStatus(homeDir)
 	case "restore":
 		return cli.RunRestore(args[1:], stdout)
 	default:

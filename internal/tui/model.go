@@ -263,11 +263,15 @@ type Model struct {
 	BackupRenamePos int
 
 	// Monday.com configuration input state.
-	MondayTokenInput   string
-	MondayTokenPos     int
-	MondayBoardInput   string
-	MondayBoardPos     int
-	MondayActiveField  screens.MondayField
+	MondayTokenInput    string
+	MondayTokenPos      int
+	MondayBoardInput    string
+	MondayBoardPos      int
+	MondayActiveField   screens.MondayField
+	MondayValidationErr error
+	// MondaySaveScope controls where monday.json is written: "global" (default)
+	// or "workspace" (current working directory).
+	MondaySaveScope string
 
 	// ExecuteFn is called to run the real pipeline. When nil, the installing
 	// screen falls back to manual step-through (useful for tests/development).
@@ -377,10 +381,11 @@ func NewModel(detection system.DetectionResult, version string) Model {
 	}
 
 	return Model{
-		Screen:        ScreenWelcome,
-		Version:       version,
-		Selection:     selection,
-		Detection:     detection,
+		Screen:          ScreenWelcome,
+		Version:         version,
+		Selection:       selection,
+		Detection:       detection,
+		MondaySaveScope: "global",
 		CommitDate: resolveCommitDate(),
 		Progress: NewProgressState([]string{
 			"Install dependencies",
@@ -665,7 +670,7 @@ func (m Model) View() string {
 	case ScreenDevAgentPicker:
 		return screens.RenderDevAgentPicker(m.DevAgents, m.DevAgentChecked, m.Cursor, m.DevAgentCloneErr)
 	case ScreenMonday:
-		return screens.RenderMonday(m.MondayTokenInput, m.MondayBoardInput, m.MondayActiveField, mondayCursorPos(m))
+		return screens.RenderMonday(m.MondayTokenInput, m.MondayBoardInput, m.MondayActiveField, mondayCursorPos(m), m.MondayValidationErr, m.MondaySaveScope)
 	case ScreenReview:
 		return screens.RenderReview(m.Review, m.Cursor)
 	case ScreenInstalling:
@@ -2173,6 +2178,12 @@ func (m Model) handleRenameInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyEnter:
+		// Validate the token before saving (skip if empty).
+		if err := monday.ValidateToken(m.MondayTokenInput); err != nil {
+			m.MondayValidationErr = err
+			return m, nil
+		}
+		m.MondayValidationErr = nil
 		// Save inputs, persist to disk, inject MCP, return to welcome menu.
 		m.Selection.Monday.Token = m.MondayTokenInput
 		m.Selection.Monday.BoardID = m.MondayBoardInput
@@ -2184,14 +2195,47 @@ func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.setScreen(ScreenWelcome)
 		return m, nil
 	case tea.KeyTab:
-		// Switch between token and board ID fields.
-		if m.MondayActiveField == screens.MondayFieldToken {
+		// Cycle between token, board ID, and scope fields.
+		switch m.MondayActiveField {
+		case screens.MondayFieldToken:
 			m.MondayActiveField = screens.MondayFieldBoardID
-		} else {
+		case screens.MondayFieldBoardID:
+			m.MondayActiveField = screens.MondayFieldScope
+		default:
 			m.MondayActiveField = screens.MondayFieldToken
 		}
 		return m, nil
+	case tea.KeyRunes:
+		// 's' toggles save scope from any field.
+		if len(msg.Runes) == 1 && msg.Runes[0] == 's' {
+			if m.MondaySaveScope == "workspace" {
+				m.MondaySaveScope = "global"
+			} else {
+				m.MondaySaveScope = "workspace"
+			}
+			return m, nil
+		}
+		m.MondayValidationErr = nil
+		if m.MondayActiveField == screens.MondayFieldToken {
+			runes := []rune(m.MondayTokenInput)
+			newRunes := make([]rune, 0, len(runes)+len(msg.Runes))
+			newRunes = append(newRunes, runes[:m.MondayTokenPos]...)
+			newRunes = append(newRunes, msg.Runes...)
+			newRunes = append(newRunes, runes[m.MondayTokenPos:]...)
+			m.MondayTokenInput = string(newRunes)
+			m.MondayTokenPos += len(msg.Runes)
+		} else {
+			runes := []rune(m.MondayBoardInput)
+			newRunes := make([]rune, 0, len(runes)+len(msg.Runes))
+			newRunes = append(newRunes, runes[:m.MondayBoardPos]...)
+			newRunes = append(newRunes, msg.Runes...)
+			newRunes = append(newRunes, runes[m.MondayBoardPos:]...)
+			m.MondayBoardInput = string(newRunes)
+			m.MondayBoardPos += len(msg.Runes)
+		}
+		return m, nil
 	case tea.KeyBackspace:
+		m.MondayValidationErr = nil
 		if m.MondayActiveField == screens.MondayFieldToken {
 			if m.MondayTokenPos > 0 {
 				runes := []rune(m.MondayTokenInput)
@@ -2226,25 +2270,6 @@ func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.MondayBoardPos < len([]rune(m.MondayBoardInput)) {
 				m.MondayBoardPos++
 			}
-		}
-		return m, nil
-	case tea.KeyRunes:
-		if m.MondayActiveField == screens.MondayFieldToken {
-			runes := []rune(m.MondayTokenInput)
-			newRunes := make([]rune, 0, len(runes)+len(msg.Runes))
-			newRunes = append(newRunes, runes[:m.MondayTokenPos]...)
-			newRunes = append(newRunes, msg.Runes...)
-			newRunes = append(newRunes, runes[m.MondayTokenPos:]...)
-			m.MondayTokenInput = string(newRunes)
-			m.MondayTokenPos += len(msg.Runes)
-		} else {
-			runes := []rune(m.MondayBoardInput)
-			newRunes := make([]rune, 0, len(runes)+len(msg.Runes))
-			newRunes = append(newRunes, runes[:m.MondayBoardPos]...)
-			newRunes = append(newRunes, msg.Runes...)
-			newRunes = append(newRunes, runes[m.MondayBoardPos:]...)
-			m.MondayBoardInput = string(newRunes)
-			m.MondayBoardPos += len(msg.Runes)
 		}
 		return m, nil
 	}
@@ -2676,8 +2701,36 @@ func mondayConfigPath() string {
 	return filepath.Join(home, ".informa-wizard", "monday.json")
 }
 
+func mondayWorkspaceConfigPath() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(cwd, ".informa-wizard", "monday.json")
+}
+
 func (m *Model) loadMondayConfig() {
-	// Try monday.json first.
+	// Try workspace monday.json first (workspace takes precedence over global).
+	wsPath := mondayWorkspaceConfigPath()
+	if wsPath != "" {
+		if data, err := os.ReadFile(wsPath); err == nil {
+			var cfg mondayJSON
+			if json.Unmarshal(data, &cfg) == nil && (cfg.Token != "" || cfg.BoardID != "") {
+				if cfg.Token != "" && m.MondayTokenInput == "" {
+					m.MondayTokenInput = cfg.Token
+					m.MondayTokenPos = len([]rune(cfg.Token))
+				}
+				if cfg.BoardID != "" && m.MondayBoardInput == "" {
+					m.MondayBoardInput = cfg.BoardID
+					m.MondayBoardPos = len([]rune(cfg.BoardID))
+				}
+				m.MondaySaveScope = "workspace"
+				return
+			}
+		}
+	}
+
+	// Try global monday.json.
 	path := mondayConfigPath()
 	if path != "" {
 		if data, err := os.ReadFile(path); err == nil {
@@ -2692,11 +2745,15 @@ func (m *Model) loadMondayConfig() {
 					m.MondayBoardPos = len([]rune(cfg.BoardID))
 				}
 				if m.MondayTokenInput != "" {
+					m.MondaySaveScope = "global"
 					return
 				}
 			}
 		}
 	}
+
+	// Default scope when no config found.
+	m.MondaySaveScope = "global"
 
 	// Fallback: read token from existing Claude Code MCP config.
 	if m.MondayTokenInput == "" {
@@ -2746,7 +2803,12 @@ func (m Model) injectMondayMCP() {
 }
 
 func (m Model) saveMondayConfig() {
-	path := mondayConfigPath()
+	var path string
+	if m.MondaySaveScope == "workspace" {
+		path = mondayWorkspaceConfigPath()
+	} else {
+		path = mondayConfigPath()
+	}
 	if path == "" {
 		return
 	}

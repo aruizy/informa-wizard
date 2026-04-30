@@ -12,10 +12,12 @@ type MondayField int
 const (
 	MondayFieldToken   MondayField = 0
 	MondayFieldBoardID MondayField = 1
+	MondayFieldScope   MondayField = 2
 )
 
-// RenderMonday renders the Monday.com configuration screen with two text inputs.
-func RenderMonday(token, boardID string, activeField MondayField, cursorPos int) string {
+// RenderMonday renders the Monday.com configuration screen with two text inputs,
+// a save-scope toggle, and an optional validation error.
+func RenderMonday(token, boardID string, activeField MondayField, cursorPos int, validationErr error, saveScope string) string {
 	var b strings.Builder
 
 	b.WriteString(styles.TitleStyle.Render("Monday.com Configuration"))
@@ -51,12 +53,35 @@ func RenderMonday(token, boardID string, activeField MondayField, cursorPos int)
 	b.WriteString(renderTextInput(boardID, activeField == MondayFieldBoardID, cursorPos, false))
 	b.WriteString("\n\n")
 
-	if token == "" {
+	// Save scope toggle
+	scopeLabel := "Save to:"
+	if activeField == MondayFieldScope {
+		scopeLabel = "▸ Save to:"
+	} else {
+		scopeLabel = "  Save to:"
+	}
+	b.WriteString(styles.HeadingStyle.Render(scopeLabel))
+	b.WriteString("\n")
+	globalMark := "[ ]"
+	workspaceMark := "[ ]"
+	if saveScope == "workspace" {
+		workspaceMark = "[x]"
+	} else {
+		globalMark = "[x]"
+	}
+	b.WriteString("  " + globalMark + " global  " + workspaceMark + " this workspace")
+	b.WriteString("\n\n")
+
+	// Warnings
+	if validationErr != nil {
+		b.WriteString(styles.WarningStyle.Render("Token validation failed: " + validationErr.Error()))
+		b.WriteString("\n\n")
+	} else if token == "" {
 		b.WriteString(styles.WarningStyle.Render("Token is required for Monday integration."))
 		b.WriteString("\n\n")
 	}
 
-	b.WriteString(styles.HelpStyle.Render("tab: switch field • enter: continue • esc: back"))
+	b.WriteString(styles.HelpStyle.Render("tab: switch field • s: toggle scope • enter: continue • esc: back"))
 
 	return b.String()
 }
