@@ -119,9 +119,78 @@ func InjectAgents(homeDir string, adapter agents.Adapter, agentIDs []string, def
 
 		changed = changed || result.Changed
 		files = append(files, destPath)
+
+		// Copy any sub-skills (skills/<name>/SKILL.md + reference files) from
+		// the agent's skills/ directory to the adapter's SkillsDir.
+		subFiles, subChanged, subErr := copyAgentSubSkills(filepath.Join(agentDir, "skills"), adapter, homeDir)
+		if subErr != nil {
+			return InjectionResult{}, fmt.Errorf("dev-agent %s: sub-skills failed: %w", agentID, subErr)
+		}
+		if subChanged {
+			changed = true
+		}
+		files = append(files, subFiles...)
 	}
 
 	return InjectionResult{Changed: changed, Files: files}, nil
+}
+
+// copyAgentSubSkills copies all sub-skills from sourceSkillsDir (e.g.,
+// ~/.informa-wizard/dev-agents/dia-del-juicio/skills/) to the adapter's
+// SkillsDir. Each sub-skill's directory is copied recursively.
+// Returns silently (no error) if sourceSkillsDir doesn't exist.
+func copyAgentSubSkills(sourceSkillsDir string, adapter agents.Adapter, homeDir string) ([]string, bool, error) {
+	if !adapter.SupportsSkills() {
+		return nil, false, nil
+	}
+	entries, err := os.ReadDir(sourceSkillsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+
+	skillsDestRoot := adapter.SkillsDir(homeDir)
+	var files []string
+	changed := false
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		subID := entry.Name()
+		sourceSubDir := filepath.Join(sourceSkillsDir, subID)
+		destSubDir := filepath.Join(skillsDestRoot, subID)
+
+		if err := os.MkdirAll(destSubDir, 0o755); err != nil {
+			return nil, false, fmt.Errorf("create sub-skill dir %q: %w", destSubDir, err)
+		}
+
+		subEntries, err := os.ReadDir(sourceSubDir)
+		if err != nil {
+			return nil, false, fmt.Errorf("read sub-skill dir %q: %w", sourceSubDir, err)
+		}
+		for _, subEntry := range subEntries {
+			if subEntry.IsDir() {
+				continue
+			}
+			content, readErr := os.ReadFile(filepath.Join(sourceSubDir, subEntry.Name()))
+			if readErr != nil {
+				return nil, false, fmt.Errorf("read sub-skill file %q: %w", subEntry.Name(), readErr)
+			}
+			destPath := filepath.Join(destSubDir, subEntry.Name())
+			result, writeErr := filemerge.WriteFileAtomic(destPath, content, 0o644)
+			if writeErr != nil {
+				return nil, false, fmt.Errorf("write sub-skill file %q: %w", destPath, writeErr)
+			}
+			if result.Changed {
+				changed = true
+			}
+			files = append(files, destPath)
+		}
+	}
+	return files, changed, nil
 }
 
 // injectOpenCodeAgents merges agent definitions into opencode.json's "agent" key.
@@ -177,6 +246,11 @@ func injectOpenCodeAgents(homeDir string, adapter agents.Adapter, agentIDs []str
 				"delegation_list": true,
 				"delegation_read": true,
 			},
+		}
+
+		// Also copy any sub-skills referenced by this agent.
+		if _, _, subErr := copyAgentSubSkills(filepath.Join(agentDir, "skills"), adapter, homeDir); subErr != nil {
+			return InjectionResult{}, fmt.Errorf("dev-agent %s: sub-skills failed: %w", agentID, subErr)
 		}
 	}
 
