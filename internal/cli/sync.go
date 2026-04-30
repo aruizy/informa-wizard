@@ -46,6 +46,73 @@ type SyncFlags struct {
 	rawProfilePhases []string
 }
 
+// ComponentPreview holds the preview of files a single component would write.
+type ComponentPreview struct {
+	ID            string
+	Files         []string // destination paths that would be written/modified
+	NewFiles      int      // count of files that do not exist yet
+	ModifiedFiles int      // count of files that already exist
+}
+
+// SyncPreview holds the preview of what a sync run would change.
+type SyncPreview struct {
+	Components []ComponentPreview
+}
+
+// TotalFiles returns the total number of files across all components.
+func (p SyncPreview) TotalFiles() int {
+	n := 0
+	for _, c := range p.Components {
+		n += len(c.Files)
+	}
+	return n
+}
+
+// ComputeSyncPreview computes which files a sync would write without touching them.
+// It reuses componentPaths (the same list used for backup targets and verification)
+// and checks os.Stat on each path to classify as new vs modified.
+func ComputeSyncPreview(homeDir string, selection model.Selection) SyncPreview {
+	adapters := resolveAdapters(selection.Agents)
+	var components []ComponentPreview
+
+	for _, component := range selection.Components {
+		paths := componentPaths(homeDir, selection, adapters, component)
+		// Deduplicate paths (some components can emit the same path for multiple adapters).
+		seen := make(map[string]struct{}, len(paths))
+		unique := paths[:0]
+		for _, p := range paths {
+			if _, ok := seen[p]; !ok {
+				seen[p] = struct{}{}
+				unique = append(unique, p)
+			}
+		}
+		paths = unique
+
+		newCount := 0
+		modCount := 0
+		for _, p := range paths {
+			if _, err := os.Stat(p); err != nil {
+				newCount++ // file doesn't exist yet
+			} else {
+				modCount++ // file would be overwritten
+			}
+		}
+
+		if len(paths) == 0 {
+			continue
+		}
+
+		components = append(components, ComponentPreview{
+			ID:            string(component),
+			Files:         paths,
+			NewFiles:      newCount,
+			ModifiedFiles: modCount,
+		})
+	}
+
+	return SyncPreview{Components: components}
+}
+
 // SyncResult holds the outcome of a sync execution.
 type SyncResult struct {
 	Agents    []model.AgentID

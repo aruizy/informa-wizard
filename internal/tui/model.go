@@ -98,9 +98,19 @@ type SyncDoneMsg struct {
 // finishes (before the sync phase begins). This enables the intermediate "sync
 // running" state to be displayed.
 type UpgradePhaseCompletedMsg struct {
-	Report         upgrade.UpgradeReport
-	Err            error
-	WizardUpdated  bool // true when informa-wizard repo had new commits after pull
+	Report        upgrade.UpgradeReport
+	Err           error
+	WizardUpdated bool // true when informa-wizard repo had new commits after pull
+}
+
+// PreviewReadyMsg is sent after git pull completes, carrying the computed sync
+// preview so the user can confirm before the actual sync runs.
+type PreviewReadyMsg struct {
+	Report  upgrade.UpgradeReport
+	Err     error
+	Preview cli.SyncPreview
+	// WizardUpdated is true when informa-wizard had new commits after pull.
+	WizardUpdated bool
 }
 
 // AgentBuilderGeneratedMsg is sent when the AI generation goroutine completes.
@@ -359,6 +369,13 @@ type Model struct {
 	// after git pull, requiring go install + restart to apply the update.
 	WizardNeedsRestart bool
 
+	// UpgradeSyncPhase tracks where we are in the upgrade+sync flow.
+	// 0=pull running, 1=preview (awaiting user confirmation), 2=sync running, 3=done.
+	UpgradeSyncPhase int
+
+	// SyncPreview holds the computed diff preview between pull and sync.
+	SyncPreview cli.SyncPreview
+
 	// UpgradeErr holds the error from the last upgrade run (nil on success).
 	UpgradeErr error
 
@@ -522,6 +539,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.UpdateResults = nil
 		m.UpdateCheckDone = false
 		return m, nil
+	case PreviewReadyMsg:
+		// Pull done + preview computed — pause for user confirmation before sync.
+		m.OperationRunning = false
+		m.UpgradeSyncPhase = 1 // preview phase
+		report := msg.Report
+		m.UpgradeReport = &report
+		m.UpgradeErr = msg.Err
+		m.WizardNeedsRestart = msg.WizardUpdated
+		m.SyncPreview = msg.Preview
+		m.UpdateResults = nil
+		m.UpdateCheckDone = false
+		return m, nil
 	case tea.KeyMsg:
 		if m.Screen == ScreenRenameBackup {
 			return m.handleRenameInput(msg)
@@ -657,7 +686,7 @@ func (m Model) View() string {
 	case ScreenProfileDelete:
 		return screens.RenderProfileDelete(m.ProfileDeleteTarget, m.Cursor)
 	case ScreenUpgradeSync:
-		return screens.RenderUpgradeSync(m.UpdateResults, m.UpgradeReport, m.SyncFilesChanged, m.UpgradeErr, m.SyncErr, m.OperationRunning, m.UpdateCheckDone, m.Cursor, m.SpinnerFrame, m.WizardNeedsRestart)
+		return screens.RenderUpgradeSync(m.UpdateResults, m.UpgradeReport, m.SyncFilesChanged, m.UpgradeErr, m.SyncErr, m.OperationRunning, m.UpdateCheckDone, m.Cursor, m.SpinnerFrame, m.WizardNeedsRestart, m.UpgradeSyncPhase, m.SyncPreview)
 	case ScreenDetection:
 		return screens.RenderDetection(m.Detection, m.Cursor)
 	case ScreenAgents:
@@ -1082,14 +1111,35 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 		if m.WizardNeedsRestart {
 			return m, restartWizardCmd()
 		}
+		// Phase 1: preview shown — user pressed Enter to confirm → run sync.
+		if m.UpgradeSyncPhase == 1 {
+			m.OperationRunning = true
+			m.UpgradeSyncPhase = 2
+			// Send UpgradePhaseCompletedMsg to flip the screen into "syncing" state,
+			// then run the actual sync.
+			report := m.UpgradeReport
+			var upgradeReport upgrade.UpgradeReport
+			if report != nil {
+				upgradeReport = *report
+			}
+			phaseMsg := func() tea.Msg {
+				return UpgradePhaseCompletedMsg{
+					Report:        upgradeReport,
+					Err:           m.UpgradeErr,
+					WizardUpdated: m.WizardNeedsRestart,
+				}
+			}
+			return m, tea.Batch(tickCmd(), tea.Sequence(phaseMsg, m.startSyncAfterPreview()))
+		}
 		// If operations are done, return to welcome.
 		if m.HasSyncRun || m.UpgradeReport != nil || m.UpgradeErr != nil {
 			m = m.withResetOperationState()
+			m.UpgradeSyncPhase = 0
 			m.setScreen(ScreenWelcome)
 			return m, nil
 		}
 
-		// Start upgrade+sync.
+		// Start upgrade+sync (pull → preview).
 		m.OperationRunning = true
 		m.OperationMode = "upgrade-sync"
 		return m, tea.Batch(tickCmd(), m.startUpgradeSync())
@@ -1804,6 +1854,8 @@ func (m Model) withResetOperationState() Model {
 	m.OperationRunning = false
 	m.OperationMode = ""
 	m.PendingSyncOverrides = nil
+	m.UpgradeSyncPhase = 0
+	m.SyncPreview = cli.SyncPreview{}
 	m.Cursor = 0
 	return m
 }
@@ -1835,17 +1887,12 @@ func (m Model) startSync(overrides *model.SyncOverrides) tea.Cmd {
 	}
 }
 
-// startUpgradeSync runs git pulls then sync sequentially via tea.Sequence.
+// startUpgradeSync runs git pulls and then computes a sync preview.
 // It pulls informa-wizard (if running from a git clone), dev-skills, and
-// dev-agents repos, then runs sync. Missing repos are skipped silently.
-//
-// The first command runs the git pulls and sends UpgradePhaseCompletedMsg
-// (so the UI can show State 2: sync running). The second command runs sync
-// and sends SyncDoneMsg.
+// dev-agents repos, then computes the diff preview and sends PreviewReadyMsg.
+// The user confirms before the actual sync runs (see startSyncAfterPreview).
 func (m Model) startUpgradeSync() tea.Cmd {
-	syncFn := m.SyncFn
-
-	pullCmd := func() tea.Msg {
+	return func() tea.Msg {
 		wizardUpdated := false
 
 		// Pull informa-wizard from the persisted source directory.
@@ -1882,10 +1929,23 @@ func (m Model) startUpgradeSync() tea.Cmd {
 			}
 		}
 
-		return UpgradePhaseCompletedMsg{WizardUpdated: wizardUpdated}
-	}
+		// Compute preview of what sync would change.
+		var preview cli.SyncPreview
+		if home != "" {
+			agentIDs := cli.DiscoverAgents(home)
+			selection := cli.BuildSyncSelection(cli.SyncFlags{}, agentIDs, home)
+			preview = cli.ComputeSyncPreview(home, selection)
+		}
 
-	syncCmd := func() tea.Msg {
+		return PreviewReadyMsg{WizardUpdated: wizardUpdated, Preview: preview}
+	}
+}
+
+// startSyncAfterPreview launches the sync goroutine after the user confirms
+// the preview. This is the second half of the upgrade+sync flow.
+func (m Model) startSyncAfterPreview() tea.Cmd {
+	syncFn := m.SyncFn
+	return func() tea.Msg {
 		if syncFn == nil {
 			return SyncDoneMsg{Err: fmt.Errorf("sync function not configured")}
 		}
@@ -1895,8 +1955,6 @@ func (m Model) startUpgradeSync() tea.Cmd {
 		filesChanged, err := syncFn(nil)
 		return SyncDoneMsg{FilesChanged: filesChanged, Err: err}
 	}
-
-	return tea.Sequence(pullCmd, syncCmd)
 }
 
 // restoreBackup triggers a backup restore in a goroutine.
@@ -2165,6 +2223,13 @@ func (m Model) goBack() Model {
 	// into a future sync triggered from a different flow (e.g. Welcome menu).
 	if m.Screen == ScreenSync && m.PendingSyncOverrides != nil {
 		m.PendingSyncOverrides = nil
+	}
+
+	// Leaving ScreenUpgradeSync via Esc from the preview phase: reset all
+	// upgrade+sync state so a subsequent visit starts fresh.
+	if m.Screen == ScreenUpgradeSync && m.UpgradeSyncPhase == 1 {
+		m = m.withResetOperationState()
+		m.UpgradeSyncPhase = 0
 	}
 
 	// On the uninstall confirmation step, Esc returns to the component picker

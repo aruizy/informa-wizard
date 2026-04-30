@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/backup"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/cli"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/pipeline"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/planner"
@@ -713,6 +714,112 @@ func TestUpgradePhaseCompletedClearsUpdateResults(t *testing.T) {
 	}
 	if state.UpdateCheckDone {
 		t.Fatalf("expected UpdateCheckDone=false after UpgradePhaseCompletedMsg, got true")
+	}
+}
+
+// ─── PreviewReadyMsg (diff preview between pull and sync) ──────────────────
+
+// TestPreviewReadyMsg_SetsPhaseAndPreview verifies that receiving PreviewReadyMsg
+// transitions to phase 1, clears OperationRunning, and stores the preview.
+func TestPreviewReadyMsg_SetsPhaseAndPreview(t *testing.T) {
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenUpgradeSync
+	m.OperationRunning = true
+	m.UpgradeSyncPhase = 0
+
+	preview := cli.SyncPreview{
+		Components: []cli.ComponentPreview{
+			{ID: "sdd", Files: []string{"/home/user/.claude/agents/sdd-init.md"}, NewFiles: 0, ModifiedFiles: 1},
+		},
+	}
+	updated, _ := m.Update(PreviewReadyMsg{Preview: preview})
+	state := updated.(Model)
+
+	if state.OperationRunning {
+		t.Fatal("expected OperationRunning=false after PreviewReadyMsg")
+	}
+	if state.UpgradeSyncPhase != 1 {
+		t.Fatalf("expected UpgradeSyncPhase=1 after PreviewReadyMsg, got %d", state.UpgradeSyncPhase)
+	}
+	if len(state.SyncPreview.Components) != 1 {
+		t.Fatalf("expected 1 preview component, got %d", len(state.SyncPreview.Components))
+	}
+	if state.SyncPreview.Components[0].ID != "sdd" {
+		t.Fatalf("expected preview component ID 'sdd', got %q", state.SyncPreview.Components[0].ID)
+	}
+}
+
+// TestPreviewReadyMsg_SetsUpgradeReport verifies that PreviewReadyMsg sets
+// UpgradeReport so the results screen can be shown after sync completes.
+func TestPreviewReadyMsg_SetsUpgradeReport(t *testing.T) {
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenUpgradeSync
+	m.OperationRunning = true
+
+	report := upgrade.UpgradeReport{
+		Results: []upgrade.ToolUpgradeResult{
+			{ToolName: "engram", Status: upgrade.UpgradeSucceeded},
+		},
+	}
+	updated, _ := m.Update(PreviewReadyMsg{Report: report})
+	state := updated.(Model)
+
+	if state.UpgradeReport == nil {
+		t.Fatal("expected UpgradeReport to be set after PreviewReadyMsg")
+	}
+}
+
+// TestUpgradeSyncPreviewConfirmation verifies that pressing Enter during phase=1
+// transitions to phase=2 and launches the sync operation.
+func TestUpgradeSyncPreviewConfirmation(t *testing.T) {
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenUpgradeSync
+	m.UpgradeSyncPhase = 1
+	m.OperationRunning = false
+	report := upgrade.UpgradeReport{}
+	m.UpgradeReport = &report
+	syncCalled := false
+	m.SyncFn = func(overrides *model.SyncOverrides) (int, error) {
+		syncCalled = true
+		return 5, nil
+	}
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	state := updated.(Model)
+
+	if state.UpgradeSyncPhase != 2 {
+		t.Fatalf("expected UpgradeSyncPhase=2 after Enter on preview, got %d", state.UpgradeSyncPhase)
+	}
+	if !state.OperationRunning {
+		t.Fatal("expected OperationRunning=true after confirming preview")
+	}
+	if cmd == nil {
+		t.Fatal("expected a cmd to be returned after confirming preview")
+	}
+	_ = syncCalled // sync runs async via cmd
+}
+
+// TestUpgradeSyncPreviewCancellation verifies that pressing Esc during phase=1
+// resets all operation state and returns to ScreenWelcome.
+func TestUpgradeSyncPreviewCancellation(t *testing.T) {
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenUpgradeSync
+	m.UpgradeSyncPhase = 1
+	m.OperationRunning = false
+	report := upgrade.UpgradeReport{}
+	m.UpgradeReport = &report
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	state := updated.(Model)
+
+	if state.Screen != ScreenWelcome {
+		t.Fatalf("expected ScreenWelcome after Esc on preview, got %v", state.Screen)
+	}
+	if state.UpgradeSyncPhase != 0 {
+		t.Fatalf("expected UpgradeSyncPhase reset to 0 after cancel, got %d", state.UpgradeSyncPhase)
+	}
+	if state.UpgradeReport != nil {
+		t.Fatal("expected UpgradeReport=nil after cancel")
 	}
 }
 
