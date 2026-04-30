@@ -134,6 +134,13 @@ func RunArgs(args []string, stdout io.Writer) error {
 			return fmt.Errorf("resolve user home directory: %w", err)
 		}
 		return cli.RunStatus(homeDir)
+	case "doctor":
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("resolve user home directory: %w", err)
+		}
+		cli.RunHealthCLI(homeDir)
+		return nil
 	case "restore":
 		return cli.RunRestore(args[1:], stdout)
 	default:

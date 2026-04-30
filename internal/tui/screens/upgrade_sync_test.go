@@ -14,7 +14,7 @@ import (
 // TestRenderUpgradeSync_ConfirmState verifies the default confirmation screen
 // (not running, no results) shows the two-step description.
 func TestRenderUpgradeSync_ConfirmState(t *testing.T) {
-	out := RenderUpgradeSync(nil, nil, 0, nil, nil, false /*operationRunning*/, true /*updateCheckDone*/, 0, 0)
+	out := RenderUpgradeSync(nil, nil, 0, nil, nil, false /*operationRunning*/, true /*updateCheckDone*/, 0, 0, false)
 
 	lower := strings.ToLower(out)
 	// Must mention both operations.
@@ -34,7 +34,7 @@ func TestRenderUpgradeSync_ConfirmState(t *testing.T) {
 // running (operationRunning=true, upgradeReport=nil), the screen shows an
 // "updating" indicator.
 func TestRenderUpgradeSync_RunningUpgradePhase(t *testing.T) {
-	out := RenderUpgradeSync(nil, nil, 0, nil, nil, true /*operationRunning*/, true, 0, 0)
+	out := RenderUpgradeSync(nil, nil, 0, nil, nil, true /*operationRunning*/, true, 0, 0, false)
 
 	lower := strings.ToLower(out)
 	if !strings.Contains(lower, "updating") && !strings.Contains(lower, "please wait") {
@@ -52,7 +52,7 @@ func TestRenderUpgradeSync_RunningSyncPhase(t *testing.T) {
 		},
 	}
 
-	out := RenderUpgradeSync(nil, report, 0, nil, nil, true /*operationRunning*/, true, 0, 0)
+	out := RenderUpgradeSync(nil, report, 0, nil, nil, true /*operationRunning*/, true, 0, 0, false)
 
 	lower := strings.ToLower(out)
 	// Update done indicator.
@@ -76,7 +76,7 @@ func TestRenderUpgradeSync_CombinedResult(t *testing.T) {
 	}
 	const syncFilesChanged = 3
 
-	out := RenderUpgradeSync(nil, report, syncFilesChanged, nil, nil, false /*operationRunning*/, true, 0, 0)
+	out := RenderUpgradeSync(nil, report, syncFilesChanged, nil, nil, false /*operationRunning*/, true, 0, 0, false)
 
 	// Must mention both result sections.
 	if !strings.Contains(out, "Update Results") {
@@ -99,7 +99,7 @@ func TestRenderUpgradeSync_CombinedResultWithSyncError(t *testing.T) {
 	}
 	syncErr := fmt.Errorf("permission denied writing config")
 
-	out := RenderUpgradeSync(nil, report, 0, nil, syncErr, false, true, 0, 0)
+	out := RenderUpgradeSync(nil, report, 0, nil, syncErr, false, true, 0, 0, false)
 
 	lower := strings.ToLower(out)
 	if !strings.Contains(lower, "fail") && !strings.Contains(lower, "error") {
@@ -115,7 +115,7 @@ func TestRenderUpgradeSync_CombinedResultWithSyncError(t *testing.T) {
 func TestRenderUpgradeSync_CombinedResultWithUpgradeError(t *testing.T) {
 	upgradeErr := fmt.Errorf("network timeout during upgrade")
 
-	out := RenderUpgradeSync(nil, nil, 2, upgradeErr, nil, false, true, 0, 0)
+	out := RenderUpgradeSync(nil, nil, 2, upgradeErr, nil, false, true, 0, 0, false)
 
 	if !strings.Contains(out, "Update Results") {
 		t.Errorf("RenderUpgradeSync(upgradeErr) should show 'Update Results'; got:\n%s", out)
@@ -142,7 +142,7 @@ func TestRenderUpgradeSync_TitleAlwaysPresent(t *testing.T) {
 
 	for _, s := range states {
 		t.Run(s.name, func(t *testing.T) {
-			out := RenderUpgradeSync(nil, s.report, 0, nil, nil, s.operationRunning, s.updateCheckDone, 0, 0)
+			out := RenderUpgradeSync(nil, s.report, 0, nil, nil, s.operationRunning, s.updateCheckDone, 0, 0, false)
 			if !strings.Contains(out, "Update + Sync") {
 				t.Errorf("RenderUpgradeSync state=%q should contain 'Update + Sync'; got:\n%s", s.name, out)
 			}
@@ -154,7 +154,7 @@ func TestRenderUpgradeSync_TitleAlwaysPresent(t *testing.T) {
 // shows immediately without waiting for an update check (updateCheckDone=false).
 func TestRenderUpgradeSync_ConfirmState_NoUpdateCheckWait(t *testing.T) {
 	results := []update.UpdateResult{}
-	out := RenderUpgradeSync(results, nil, 0, nil, nil, false, false /*updateCheckDone=false*/, 0, 0)
+	out := RenderUpgradeSync(results, nil, 0, nil, nil, false, false /*updateCheckDone=false*/, 0, 0, false)
 
 	lower := strings.ToLower(out)
 	// Should show the confirmation screen (not a "checking" spinner).

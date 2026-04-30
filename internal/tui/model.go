@@ -206,6 +206,8 @@ const (
 	ScreenAgentBuilderInstalling
 	ScreenAgentBuilderComplete
 	ScreenMonday
+	ScreenHealth
+	ScreenUninstall
 )
 
 type Model struct {
@@ -272,6 +274,15 @@ type Model struct {
 	// MondaySaveScope controls where monday.json is written: "global" (default)
 	// or "workspace" (current working directory).
 	MondaySaveScope string
+
+	// Health check state.
+	HealthReport cli.Report
+
+	// Uninstall screen state.
+	UninstallComponents []string // installed components at the time the screen was opened
+	UninstallConfirm    bool     // true when showing the confirmation step
+	UninstallSelected   string   // the component chosen by the user
+	UninstallErr        error    // error from the most recent uninstall attempt
 
 	// ExecuteFn is called to run the real pipeline. When nil, the installing
 	// screen falls back to manual step-through (useful for tests/development).
@@ -622,7 +633,7 @@ func (m Model) findProgressItem(stepID string) int {
 func (m Model) View() string {
 	switch m.Screen {
 	case ScreenWelcome:
-		return screens.RenderWelcome(m.Cursor, m.Version, "", m.hasAgentBuilderEngines(), m.CommitDate)
+		return screens.RenderWelcome(m.Cursor, m.Version, "", m.hasDetectedOpenCode(), len(m.ProfileList), m.hasAgentBuilderEngines(), m.CommitDate)
 	case ScreenUpgrade:
 		return screens.RenderUpgrade(m.UpdateResults, m.UpgradeReport, m.UpgradeErr, m.OperationRunning, m.UpdateCheckDone, m.Cursor, m.SpinnerFrame)
 	case ScreenSync:
@@ -717,6 +728,10 @@ func (m Model) View() string {
 		return screens.RenderABInstalling(engineName, m.SpinnerFrame, m.AgentBuilder.InstallErr)
 	case ScreenAgentBuilderComplete:
 		return screens.RenderABComplete(m.AgentBuilder.Generated, m.AgentBuilder.InstallResults)
+	case ScreenHealth:
+		return screens.RenderHealth(m.HealthReport)
+	case ScreenUninstall:
+		return screens.RenderUninstall(m.UninstallComponents, m.Cursor, m.UninstallConfirm, m.UninstallSelected)
 	default:
 		return ""
 	}
@@ -957,20 +972,37 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 	case ScreenWelcome:
 		switch m.Cursor {
 		case 0:
+			// "Start installation"
 			m.setScreen(ScreenDetection)
 		case 1:
+			// "Update + Sync"
 			m = m.withResetOperationState()
 			m.setScreen(ScreenUpgradeSync)
 		case 2:
 			// "View installation" — read-only summary screen.
 			m.setScreen(ScreenInstallationView)
 		case 3:
+			// "Uninstall component"
+			m.UninstallConfirm = false
+			m.UninstallSelected = ""
+			m.UninstallErr = nil
+			m.UninstallComponents = m.loadInstalledComponentNames()
+			m.setScreen(ScreenUninstall)
+		case 4:
+			// "Health check"
+			homeDir, hdErr := os.UserHomeDir()
+			if hdErr == nil {
+				m.HealthReport, _ = cli.RunHealth(homeDir)
+			}
+			m.setScreen(ScreenHealth)
+		case 5:
 			// "Configure Monday" — load existing config if available.
 			m.loadMondayConfig()
 			m.setScreen(ScreenMonday)
-		case 4:
+		case 6:
+			// "Configure models"
 			m.setScreen(ScreenModelConfig)
-		case 5:
+		case 7:
 			// "Create your own Agent" — blocked when no engines are available.
 			if !m.hasAgentBuilderEngines() {
 				return m, nil
@@ -984,12 +1016,22 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			ta.SetHeight(5)
 			m.AgentBuilder.Textarea = ta
 			m.setScreen(ScreenAgentBuilderEngine)
-		case 6:
-			// "Manage backups"
-			m.setScreen(ScreenBackups)
-		case 7:
-			// "Quit"
-			return m, tea.Quit
+		default:
+			// Handle dynamic positions that depend on whether profiles are shown.
+			opts := screens.WelcomeOptions(m.hasDetectedOpenCode(), len(m.ProfileList), m.hasAgentBuilderEngines())
+			if m.Cursor >= len(opts) {
+				break
+			}
+			label := opts[m.Cursor]
+			switch {
+			case label == "Manage backups":
+				m.setScreen(ScreenBackups)
+			case label == "Quit":
+				return m, tea.Quit
+			case strings.HasPrefix(label, "OpenCode SDD Profile"):
+				// "OpenCode SDD Profiles" or "OpenCode SDD Profiles (N)"
+				m.setScreen(ScreenProfiles)
+			}
 		}
 	case ScreenUpgrade:
 		// Guard: don't re-launch while running.
@@ -1488,6 +1530,38 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 		m.Selection.Monday.BoardID = m.MondayBoardInput
 		m.saveMondayConfig()
 		m.injectMondayMCP()
+		m.setScreen(ScreenWelcome)
+		return m, nil
+	case ScreenHealth:
+		// Enter / any selection on health screen returns to welcome.
+		m.setScreen(ScreenWelcome)
+		return m, nil
+	case ScreenUninstall:
+		if !m.UninstallConfirm {
+			// First step: user selected a component.
+			if m.Cursor < len(m.UninstallComponents) {
+				m.UninstallSelected = m.UninstallComponents[m.Cursor]
+				m.UninstallConfirm = true
+				m.Cursor = 1 // default to "Cancel" for safety
+			}
+			return m, nil
+		}
+		// Second step: confirmation.
+		if m.Cursor == 0 {
+			// "Yes, uninstall"
+			homeDir, hdErr := os.UserHomeDir()
+			if hdErr != nil {
+				m.UninstallErr = hdErr
+				m.setScreen(ScreenWelcome)
+				return m, nil
+			}
+			m.UninstallErr = cli.UninstallComponent(homeDir, model.ComponentID(m.UninstallSelected))
+			m.setScreen(ScreenWelcome)
+			return m, nil
+		}
+		// "Cancel" or any other option
+		m.UninstallConfirm = false
+		m.UninstallSelected = ""
 		m.setScreen(ScreenWelcome)
 		return m, nil
 	case ScreenReview:
@@ -2092,6 +2166,15 @@ func (m Model) goBack() Model {
 		m.PendingSyncOverrides = nil
 	}
 
+	// On the uninstall confirmation step, Esc returns to the component picker
+	// rather than all the way to ScreenWelcome.
+	if m.Screen == ScreenUninstall && m.UninstallConfirm {
+		m.UninstallConfirm = false
+		m.UninstallSelected = ""
+		m.Cursor = 0
+		return m
+	}
+
 	previous, ok := PreviousScreen(m.Screen)
 	if !ok {
 		return m
@@ -2279,7 +2362,14 @@ func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) optionCount() int {
 	switch m.Screen {
 	case ScreenWelcome:
-		return len(screens.WelcomeOptions(m.hasAgentBuilderEngines()))
+		return len(screens.WelcomeOptions(m.hasDetectedOpenCode(), len(m.ProfileList), m.hasAgentBuilderEngines()))
+	case ScreenHealth:
+		return 0 // no selectable options; any key returns to welcome
+	case ScreenUninstall:
+		if m.UninstallConfirm {
+			return 2 // "Yes, uninstall" and "Cancel"
+		}
+		return len(m.UninstallComponents)
 	case ScreenUpgrade:
 		if m.UpgradeReport != nil || m.UpgradeErr != nil {
 			return 1 // "return" option in results/error state
@@ -2612,6 +2702,20 @@ func extractAvailableUpdates(results []update.UpdateResult) []screens.UpdateInfo
 		}
 	}
 	return updates
+}
+
+// loadInstalledComponentNames returns the list of installed component names from
+// state.json. Returns nil if state.json cannot be read.
+func (m Model) loadInstalledComponentNames() []string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	st, err := state.Read(homeDir)
+	if err != nil {
+		return nil
+	}
+	return st.InstalledComponents
 }
 
 // hasDetectedOpenCode returns true if OpenCode config directory was detected.
