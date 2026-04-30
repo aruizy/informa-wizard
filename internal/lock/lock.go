@@ -38,9 +38,12 @@ func Acquire(homeDir string) (*Lock, error) {
 		// Attempt to create the lock file exclusively.
 		f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 		if err == nil {
-			// We created the file — write our PID and return.
+			// Write PID + process name so a reused PID by another binary
+			// doesn't trigger a false "already locked" error.
 			pid := os.Getpid()
-			_, writeErr := fmt.Fprintf(f, "%d", pid)
+			exe, _ := os.Executable()
+			exeName := filepath.Base(exe)
+			_, writeErr := fmt.Fprintf(f, "%d\n%s", pid, exeName)
 			closeErr := f.Close()
 			if writeErr != nil || closeErr != nil {
 				_ = os.Remove(path)
@@ -61,15 +64,21 @@ func Acquire(homeDir string) (*Lock, error) {
 			continue
 		}
 
-		pidStr := strings.TrimSpace(string(data))
-		pid, parseErr := strconv.Atoi(pidStr)
+		// Parse: first line is PID, second line (optional) is exe name.
+		lines := strings.SplitN(strings.TrimSpace(string(data)), "\n", 2)
+		pid, parseErr := strconv.Atoi(strings.TrimSpace(lines[0]))
 		if parseErr != nil {
 			// Corrupted lock file — remove and retry.
 			_ = os.Remove(path)
 			continue
 		}
+		var lockedExe string
+		if len(lines) > 1 {
+			lockedExe = strings.TrimSpace(lines[1])
+		}
 
-		if isProcessRunning(pid) {
+		// If process is running but it's not informa-wizard, the PID was reused.
+		if isProcessRunning(pid) && (lockedExe == "" || isWizardProcess(pid, lockedExe)) {
 			return nil, fmt.Errorf(
 				"another informa-wizard instance is running (PID %d). "+
 					"Wait for it to finish or remove %s if you're sure no instance is running.",
@@ -77,7 +86,7 @@ func Acquire(homeDir string) (*Lock, error) {
 			)
 		}
 
-		// Stale lock — remove and retry the acquire loop.
+		// Stale lock (process gone, or PID reused by a different binary) — remove and retry.
 		_ = os.Remove(path)
 	}
 }
