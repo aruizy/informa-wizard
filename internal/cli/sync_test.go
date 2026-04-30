@@ -1362,7 +1362,7 @@ func TestDiscoverAgentsUsesStateFileWhenPresent(t *testing.T) {
 
 	// Write state recording only opencode — even though we also create the
 	// claude-code config dir to simulate the IDE being installed on disk.
-	if err := state.Write(home, []string{"opencode"}, nil); err != nil {
+	if err := state.Write(home, []string{"opencode"}, nil, nil, ""); err != nil {
 		t.Fatalf("state.Write() error = %v", err)
 	}
 
@@ -1415,7 +1415,7 @@ func TestDiscoverAgentsFallsBackToFSDiscoveryWhenStateEmpty(t *testing.T) {
 	home := t.TempDir()
 
 	// Write state with zero agents.
-	if err := state.Write(home, []string{}, nil); err != nil {
+	if err := state.Write(home, []string{}, nil, nil, ""); err != nil {
 		t.Fatalf("state.Write() error = %v", err)
 	}
 
@@ -1445,7 +1445,7 @@ func TestDiscoverAgentsStateMultipleAgents(t *testing.T) {
 	home := t.TempDir()
 
 	agents := []string{"claude-code", "opencode", "gemini-cli"}
-	if err := state.Write(home, agents, nil); err != nil {
+	if err := state.Write(home, agents, nil, nil, ""); err != nil {
 		t.Fatalf("state.Write() error = %v", err)
 	}
 
@@ -1465,7 +1465,7 @@ func TestDiscoverAgentsStateMultipleAgents(t *testing.T) {
 
 func TestDiscoverComponentsReturnsPersistedComponents(t *testing.T) {
 	home := t.TempDir()
-	if err := state.Write(home, []string{"claude-code"}, []string{"sdd", "engram", "skills"}); err != nil {
+	if err := state.Write(home, []string{"claude-code"}, []string{"sdd", "engram", "skills"}, nil, ""); err != nil {
 		t.Fatalf("state.Write() error = %v", err)
 	}
 
@@ -1479,7 +1479,7 @@ func TestDiscoverComponentsReturnsPersistedComponents(t *testing.T) {
 func TestDiscoverComponentsRespectsEmptyState(t *testing.T) {
 	home := t.TempDir()
 	// User explicitly installed zero components.
-	if err := state.Write(home, []string{"claude-code"}, []string{}); err != nil {
+	if err := state.Write(home, []string{"claude-code"}, []string{}, nil, ""); err != nil {
 		t.Fatalf("state.Write() error = %v", err)
 	}
 
@@ -1504,7 +1504,7 @@ func TestDiscoverComponentsFallsBackWhenStatePreDatesComponentField(t *testing.T
 	home := t.TempDir()
 	// Simulate a state file written before component persistence was added:
 	// has installed_agents but no installed_components key.
-	if err := state.Write(home, []string{"claude-code"}, nil); err != nil {
+	if err := state.Write(home, []string{"claude-code"}, nil, nil, ""); err != nil {
 		t.Fatalf("state.Write() error = %v", err)
 	}
 
@@ -1518,7 +1518,7 @@ func TestDiscoverComponentsFallsBackWhenStatePreDatesComponentField(t *testing.T
 func TestBuildSyncSelectionDeduplicatesComponents(t *testing.T) {
 	home := t.TempDir()
 	// State has permissions already installed.
-	if err := state.Write(home, []string{"claude-code"}, []string{"sdd", "permissions"}); err != nil {
+	if err := state.Write(home, []string{"claude-code"}, []string{"sdd", "permissions"}, nil, ""); err != nil {
 		t.Fatalf("state.Write() error = %v", err)
 	}
 

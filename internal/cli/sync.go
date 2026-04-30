@@ -262,9 +262,21 @@ func BuildSyncSelection(flags SyncFlags, agentIDs []model.AgentID, homeDir strin
 
 	sddMode := model.SDDModeID(flags.SDDMode)
 
+	// Resolve skills: explicit flag > persisted state > preset default.
 	var skillIDs []model.SkillID
 	for _, raw := range flags.Skills {
 		skillIDs = append(skillIDs, model.SkillID(raw))
+	}
+	preset := model.PresetFull
+	if len(skillIDs) == 0 {
+		if s, err := state.Read(homeDir); err == nil {
+			for _, raw := range s.InstalledSkills {
+				skillIDs = append(skillIDs, model.SkillID(raw))
+			}
+			if s.InstalledPreset != "" {
+				preset = model.PresetID(s.InstalledPreset)
+			}
+		}
 	}
 
 	return model.Selection{
@@ -274,9 +286,7 @@ func BuildSyncSelection(flags SyncFlags, agentIDs []model.AgentID, homeDir strin
 		StrictTDD:  flags.StrictTDD,
 		Skills:     skillIDs,
 		Profiles:   flags.Profiles,
-		// Preset is set to full so selectedSkillIDs() returns the
-		// correct default skill set when no explicit skills are provided.
-		Preset: model.PresetFull,
+		Preset:     preset,
 	}
 }
 
