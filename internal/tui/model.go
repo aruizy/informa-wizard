@@ -2173,10 +2173,11 @@ func (m Model) handleRenameInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyEnter:
-		// Save inputs and return to welcome menu.
-		// Monday is configured from the welcome menu, not the install flow.
+		// Save inputs, persist to disk, inject MCP, return to welcome menu.
 		m.Selection.Monday.Token = m.MondayTokenInput
 		m.Selection.Monday.BoardID = m.MondayBoardInput
+		m.saveMondayConfig()
+		m.injectMondayMCP()
 		m.setScreen(ScreenWelcome)
 		return m, nil
 	case tea.KeyEsc:
