@@ -112,8 +112,9 @@ Generate a compact mini-PRD document in Spanish with this structure:
 
 The board ID is resolved in this order:
 1. User provides it explicitly in the conversation
-2. Read from project config (`.informa-wizard/monday.json` if exists)
-3. Ask the user: "¿En qué tablero de Monday quieres crear la tarea? Dame el board ID."
+2. Read from global wizard config (`~/.informa-wizard/monday.json` if exists)
+3. Read from project override (`.informa-wizard/monday.json` in the workspace root if exists)
+4. Ask the user: "¿En qué tablero de Monday quieres crear la tarea? Dame el board ID."
 
 ---
 
