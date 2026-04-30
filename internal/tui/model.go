@@ -26,6 +26,7 @@ import (
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/opencode"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/pipeline"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/planner"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/state"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/system"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/tui/screens"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/update"
@@ -183,6 +184,7 @@ const (
 	ScreenModelPicker
 	ScreenComplete
 	ScreenBackups
+	ScreenInstallationView
 	ScreenRestoreConfirm
 	ScreenRestoreResult
 	ScreenDeleteConfirm
@@ -679,6 +681,8 @@ func (m Model) View() string {
 		})
 	case ScreenBackups:
 		return screens.RenderBackups(m.Backups, m.Cursor, m.BackupScroll, m.PinErr)
+	case ScreenInstallationView:
+		return screens.RenderInstallationView(m.buildInstallationViewData())
 	case ScreenRestoreConfirm:
 		return screens.RenderRestoreConfirm(m.SelectedBackup, m.Cursor)
 	case ScreenRestoreResult:
@@ -953,12 +957,15 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			m = m.withResetOperationState()
 			m.setScreen(ScreenUpgradeSync)
 		case 2:
+			// "View installation" — read-only summary screen.
+			m.setScreen(ScreenInstallationView)
+		case 3:
 			// "Configure Monday" — load existing config if available.
 			m.loadMondayConfig()
 			m.setScreen(ScreenMonday)
-		case 3:
-			m.setScreen(ScreenModelConfig)
 		case 4:
+			m.setScreen(ScreenModelConfig)
+		case 5:
 			// "Create your own Agent" — blocked when no engines are available.
 			if !m.hasAgentBuilderEngines() {
 				return m, nil
@@ -972,10 +979,10 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			ta.SetHeight(5)
 			m.AgentBuilder.Textarea = ta
 			m.setScreen(ScreenAgentBuilderEngine)
-		case 5:
+		case 6:
 			// "Manage backups"
 			m.setScreen(ScreenBackups)
-		case 6:
+		case 7:
 			// "Quit"
 			return m, tea.Quit
 		}
@@ -1528,6 +1535,9 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 		}
 	case ScreenComplete:
 		return m, tea.Quit
+	case ScreenInstallationView:
+		m.setScreen(ScreenWelcome)
+		return m, nil
 	case ScreenBackups:
 		if m.Cursor < len(m.Backups) {
 			// Navigate to confirmation screen instead of immediately restoring.
@@ -2296,6 +2306,8 @@ func (m Model) optionCount() int {
 		return 1
 	case ScreenBackups:
 		return len(m.Backups) + 1
+	case ScreenInstallationView:
+		return 1
 	case ScreenRestoreConfirm:
 		return 2 // "Restore" + "Cancel"
 	case ScreenRestoreResult:
@@ -2741,6 +2753,33 @@ func (m Model) saveMondayConfig() {
 	cfg := mondayJSON{Token: m.MondayTokenInput, BoardID: m.MondayBoardInput}
 	data, _ := json.MarshalIndent(cfg, "", "  ")
 	_ = os.WriteFile(path, append(data, '\n'), 0o644)
+}
+
+// buildInstallationViewData reads state.json and the dev-skills/dev-agents/monday
+// config files and builds the data shown on ScreenInstallationView.
+func (m Model) buildInstallationViewData() screens.InstallationViewData {
+	home := homeDir()
+	data := screens.InstallationViewData{}
+	if home == "" {
+		return data
+	}
+	if s, err := state.Read(home); err == nil {
+		data.State = s
+	}
+	if cfg, err := devskills.ReadConfig(home); err == nil {
+		data.DevSkills = cfg.InstalledSkills
+	}
+	if cfg, err := devagents.ReadConfig(home); err == nil {
+		data.DevAgents = cfg.InstalledAgents
+	}
+	if mondayData, err := os.ReadFile(filepath.Join(home, ".informa-wizard", "monday.json")); err == nil {
+		var mc mondayJSON
+		if json.Unmarshal(mondayData, &mc) == nil {
+			data.MondayToken = mc.Token
+			data.MondayBoard = mc.BoardID
+		}
+	}
+	return data
 }
 
 func (m Model) shouldShowClaudeModelPickerScreen() bool {
