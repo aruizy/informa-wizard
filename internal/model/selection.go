@@ -52,6 +52,7 @@ func (s Selection) HasComponent(component ComponentID) bool {
 type SyncOverrides struct {
 	ModelAssignments       map[string]ModelAssignment  // nil = no override; empty map = reset to defaults
 	ClaudeModelAssignments map[string]ClaudeModelAlias // nil = no override; empty map = reset to defaults
+	ClaudeModelPreset      string                      // "" = no override; preset name (balanced/performance/economy/custom) — persisted to state.json on sync success
 	SDDMode                SDDModeID                   // "" = no override; when non-empty, overrides the sync's default SDD mode
 	StrictTDD              *bool                       // nil = no override; non-nil = override strict TDD mode
 	Profiles               []Profile                   // NEW: profile creation/updates during sync

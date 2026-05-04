@@ -344,7 +344,35 @@ func tuiSync(homeDir string) tui.SyncFunc {
 		if err != nil {
 			return 0, err
 		}
+		// Persist Claude preset choice to state.json so View Installation,
+		// Health, and the next entry into the picker reflect the new value.
+		// Other state fields are preserved by reading the existing state.
+		if overrides != nil && overrides.ClaudeModelPreset != "" {
+			persistClaudePreset(homeDir, overrides.ClaudeModelPreset)
+		}
 		return result.FilesChanged, nil
+	}
+}
+
+// persistClaudePreset rewrites state.json with the new Claude preset, leaving
+// all other fields untouched. Read errors (missing/invalid state) are logged
+// but non-fatal: the sync itself already succeeded.
+func persistClaudePreset(homeDir, preset string) {
+	s, err := state.Read(homeDir)
+	if err != nil {
+		// Missing or invalid state — write a fresh one with just the preset.
+		// Empty agent/component slices are acceptable: install will repopulate.
+		s = state.InstallState{}
+	}
+	if writeErr := state.Write(
+		homeDir,
+		s.InstalledAgents,
+		s.InstalledComponents,
+		s.InstalledSkills,
+		s.InstalledPreset,
+		preset,
+	); writeErr != nil {
+		logger.Warn("failed to persist Claude preset to state.json: %v", writeErr)
 	}
 }
 
@@ -359,6 +387,9 @@ func applyOverrides(selection *model.Selection, overrides *model.SyncOverrides) 
 	}
 	if overrides.ClaudeModelAssignments != nil {
 		selection.ClaudeModelAssignments = overrides.ClaudeModelAssignments
+	}
+	if overrides.ClaudeModelPreset != "" {
+		selection.ClaudeModelPreset = overrides.ClaudeModelPreset
 	}
 	if overrides.SDDMode != "" {
 		selection.SDDMode = overrides.SDDMode

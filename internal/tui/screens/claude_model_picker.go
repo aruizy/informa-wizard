@@ -92,6 +92,40 @@ func NewClaudeModelPickerState() ClaudeModelPickerState {
 	}
 }
 
+// NewClaudeModelPickerStateForPreset seeds the picker with the supplied preset
+// so the user enters the screen with their existing choice highlighted.
+// Unknown or empty preset names fall back to balanced.
+func NewClaudeModelPickerStateForPreset(presetName string) ClaudeModelPickerState {
+	preset := ClaudeModelPreset(presetName)
+	if ctor, ok := presetConstructors[preset]; ok {
+		return ClaudeModelPickerState{
+			Preset:            preset,
+			CustomAssignments: ctor(),
+			InCustomMode:      false,
+		}
+	}
+	if preset == ClaudePresetCustom {
+		return ClaudeModelPickerState{
+			Preset:            ClaudePresetCustom,
+			CustomAssignments: model.ClaudeModelPresetBalanced(),
+			InCustomMode:      false,
+		}
+	}
+	return NewClaudeModelPickerState()
+}
+
+// IndexOfClaudePreset returns the cursor index for the given preset in the
+// picker's display order, or 0 (balanced) when the preset is unknown.
+func IndexOfClaudePreset(presetName string) int {
+	preset := ClaudeModelPreset(presetName)
+	for i, p := range claudePresetOrder {
+		if p == preset {
+			return i
+		}
+	}
+	return 0
+}
+
 // presetConstructors maps preset IDs to their constructor functions.
 var presetConstructors = map[ClaudeModelPreset]func() map[string]model.ClaudeModelAlias{
 	ClaudePresetBalanced:    model.ClaudeModelPresetBalanced,

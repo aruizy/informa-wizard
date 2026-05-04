@@ -925,33 +925,33 @@ func TestWelcomeMenu_ConfigureModelsNavigation(t *testing.T) {
 	}
 }
 
-// TestWelcomeMenu_BackupsNavigation verifies cursor 8 (Manage backups) goes to ScreenBackups
+// TestWelcomeMenu_BackupsNavigation verifies cursor 9 (Manage backups) goes to ScreenBackups
 // when OpenCode is not detected (no profiles option inserted).
 func TestWelcomeMenu_BackupsNavigation(t *testing.T) {
 	m := NewModel(system.DetectionResult{}, "dev")
 	m.Screen = ScreenWelcome
-	m.Cursor = 8
+	m.Cursor = 9
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	state := updated.(Model)
 
 	if state.Screen != ScreenBackups {
-		t.Fatalf("cursor=8 (Backups): screen = %v, want %v", state.Screen, ScreenBackups)
+		t.Fatalf("cursor=9 (Backups): screen = %v, want %v", state.Screen, ScreenBackups)
 	}
 }
 
-// TestWelcomeMenu_OptionCount verifies the welcome menu has 10 items without OpenCode
-// and 11 items when OpenCode is detected (adds "OpenCode SDD Profiles" option).
+// TestWelcomeMenu_OptionCount verifies the welcome menu has 11 items without OpenCode
+// and 12 items when OpenCode is detected (adds "OpenCode SDD Profiles" option).
 func TestWelcomeMenu_OptionCount(t *testing.T) {
-	// Without OpenCode detected: 10 options.
+	// Without OpenCode detected: 11 options.
 	opts := screens.WelcomeOptions(false, 0, true)
-	if len(opts) != 10 {
-		t.Fatalf("WelcomeOptions(showProfiles=false) len = %d, want 10; got %v", len(opts), opts)
+	if len(opts) != 11 {
+		t.Fatalf("WelcomeOptions(showProfiles=false) len = %d, want 11; got %v", len(opts), opts)
 	}
-	// With OpenCode detected: 11 options (adds "OpenCode SDD Profiles").
+	// With OpenCode detected: 12 options (adds "OpenCode SDD Profiles").
 	optsWithProfiles := screens.WelcomeOptions(true, 0, true)
-	if len(optsWithProfiles) != 11 {
-		t.Fatalf("WelcomeOptions(showProfiles=true) len = %d, want 11; got %v", len(optsWithProfiles), optsWithProfiles)
+	if len(optsWithProfiles) != 12 {
+		t.Fatalf("WelcomeOptions(showProfiles=true) len = %d, want 12; got %v", len(optsWithProfiles), optsWithProfiles)
 	}
 }
 
@@ -2843,12 +2843,12 @@ func TestPinErrClearedOnScreenReentry(t *testing.T) {
 		t.Fatalf("Esc from ScreenBackups: screen = %v, want ScreenWelcome", afterEsc.Screen)
 	}
 
-	// Navigate back to ScreenBackups (cursor 8 on Welcome → enter, no OpenCode detected).
-	afterEsc.Cursor = 8
+	// Navigate back to ScreenBackups (cursor 9 on Welcome → enter, no OpenCode detected).
+	afterEsc.Cursor = 9
 	updated2, _ := afterEsc.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	afterReturn := updated2.(Model)
 	if afterReturn.Screen != ScreenBackups {
-		t.Fatalf("Enter cursor=8 from ScreenWelcome: screen = %v, want ScreenBackups", afterReturn.Screen)
+		t.Fatalf("Enter cursor=9 from ScreenWelcome: screen = %v, want ScreenBackups", afterReturn.Screen)
 	}
 
 	// PinErr must be cleared on re-entry.

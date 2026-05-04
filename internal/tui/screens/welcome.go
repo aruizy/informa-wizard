@@ -28,6 +28,7 @@ func WelcomeOptions(showProfiles bool, profileCount int, hasEngines bool) []stri
 		"Health check",
 		"Configure Monday",
 		"Configure models",
+		"Switch Claude preset",
 		agentLabel,
 	}
 

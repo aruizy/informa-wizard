@@ -66,27 +66,27 @@ func TestWelcomeOptions_WithProfiles_CountOne(t *testing.T) {
 	}
 }
 
-// TestWelcomeOptions_OptionCount_WithoutProfiles verifies 10 options when showProfiles=false
+// TestWelcomeOptions_OptionCount_WithoutProfiles verifies 11 options when showProfiles=false
 // and hasEngines=true (agent option visible).
 func TestWelcomeOptions_OptionCount_WithoutProfiles(t *testing.T) {
 	opts := screens.WelcomeOptions(false, 0, true)
 	// Expected: Start installation, Update + Sync, View installation, Uninstall component,
-	// Health check, Configure Monday, Configure models, Create your own Agent,
-	// Manage backups, Quit = 10
-	want := 10
+	// Health check, Configure Monday, Configure models, Switch Claude preset,
+	// Create your own Agent, Manage backups, Quit = 11
+	want := 11
 	if len(opts) != want {
 		t.Errorf("WelcomeOptions(showProfiles=false, hasEngines=true) = %d options, want %d; opts: %v", len(opts), want, opts)
 	}
 }
 
-// TestWelcomeOptions_OptionCount_WithProfiles verifies 11 options when showProfiles=true
+// TestWelcomeOptions_OptionCount_WithProfiles verifies 12 options when showProfiles=true
 // and hasEngines=true.
 func TestWelcomeOptions_OptionCount_WithProfiles(t *testing.T) {
 	opts := screens.WelcomeOptions(true, 2, true)
 	// Expected: Start installation, Update + Sync, View installation, Uninstall component,
-	// Health check, Configure Monday, Configure models, Create your own Agent,
-	// OpenCode SDD Profiles (2), Manage backups, Quit = 11
-	want := 11
+	// Health check, Configure Monday, Configure models, Switch Claude preset,
+	// Create your own Agent, OpenCode SDD Profiles (2), Manage backups, Quit = 12
+	want := 12
 	if len(opts) != want {
 		t.Errorf("WelcomeOptions(showProfiles=true, hasEngines=true) = %d options, want %d; opts: %v", len(opts), want, opts)
 	}

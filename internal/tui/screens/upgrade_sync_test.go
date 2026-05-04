@@ -116,13 +116,19 @@ func TestRenderUpgradeSync_CombinedResultWithSyncError(t *testing.T) {
 
 // TestRenderUpgradeSync_CombinedResultWithUpgradeError verifies that an
 // update error is shown in the combined result (upgradeErr != nil, report nil).
+// When no upgrade report exists, the section renders as "Pull Results" with a
+// "Pull failed" prefix, distinguishing the Update+Sync pull-phase failure path
+// from real tool-upgrade failures.
 func TestRenderUpgradeSync_CombinedResultWithUpgradeError(t *testing.T) {
 	upgradeErr := fmt.Errorf("network timeout during upgrade")
 
 	out := RenderUpgradeSync(nil, nil, 2, upgradeErr, nil, false, true, 0, 0, false, 3, noPreview)
 
-	if !strings.Contains(out, "Update Results") {
-		t.Errorf("RenderUpgradeSync(upgradeErr) should show 'Update Results'; got:\n%s", out)
+	if !strings.Contains(out, "Pull Results") {
+		t.Errorf("RenderUpgradeSync(upgradeErr, nil report) should show 'Pull Results'; got:\n%s", out)
+	}
+	if !strings.Contains(out, "Pull failed") {
+		t.Errorf("RenderUpgradeSync(upgradeErr, nil report) should show 'Pull failed' prefix; got:\n%s", out)
 	}
 	if !strings.Contains(out, upgradeErr.Error()) {
 		t.Errorf("RenderUpgradeSync(upgradeErr) should show error text %q; got:\n%s", upgradeErr.Error(), out)

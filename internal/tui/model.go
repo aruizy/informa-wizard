@@ -370,6 +370,12 @@ type Model struct {
 	// continuing the install flow.
 	ModelConfigMode bool
 
+	// QuickClaudePresetMode is true when ScreenClaudeModelPicker was reached
+	// via the welcome-menu "Switch Claude preset" shortcut. It rides on top of
+	// ModelConfigMode so the save path still triggers a sync, but Esc/back
+	// returns to ScreenWelcome rather than the intermediate ScreenModelConfig.
+	QuickClaudePresetMode bool
+
 	// PendingSyncOverrides holds model assignments selected via the
 	// "Configure Models" shortcut. When non-nil, the next sync run merges
 	// these into the sync selection so the choices are persisted to disk.
@@ -850,8 +856,10 @@ func (m Model) handleKeyPress(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 				// In ModelConfigMode, persist model assignments via sync.
 				if m.ModelConfigMode {
 					m.ModelConfigMode = false
+					m.QuickClaudePresetMode = false
 					m.PendingSyncOverrides = &model.SyncOverrides{
 						ClaudeModelAssignments: updated,
+						ClaudeModelPreset:      string(m.ClaudeModelPicker.Preset),
 					}
 					m = m.withResetSyncState()
 					m.setScreen(ScreenSync)
@@ -1157,6 +1165,21 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			// "Configure models"
 			m.setScreen(ScreenModelConfig)
 		case 7:
+			// "Switch Claude preset" — shortcut straight to ClaudeModelPicker.
+			// Seed the picker with the currently installed preset so the user
+			// enters with their existing choice highlighted.
+			var currentPreset string
+			if homeDir, hdErr := os.UserHomeDir(); hdErr == nil {
+				if s, err := state.Read(homeDir); err == nil {
+					currentPreset = s.InstalledClaudePreset
+				}
+			}
+			m.ModelConfigMode = true
+			m.QuickClaudePresetMode = true
+			m.ClaudeModelPicker = screens.NewClaudeModelPickerStateForPreset(currentPreset)
+			m.setScreen(ScreenClaudeModelPicker)
+			m.Cursor = screens.IndexOfClaudePreset(currentPreset)
+		case 8:
 			// "Create your own Agent" — blocked when no engines are available.
 			if !m.hasAgentBuilderEngines() {
 				return m, nil
@@ -2188,10 +2211,17 @@ func (m Model) goBack() Model {
 		return m
 	}
 
-	// ModelConfigMode: pickers reached via Model Config shortcut return to ScreenModelConfig.
+	// ModelConfigMode: pickers reached via Model Config shortcut return to ScreenModelConfig,
+	// except when reached via the "Switch Claude preset" welcome shortcut, which returns
+	// directly to ScreenWelcome.
 	if m.ModelConfigMode && (m.Screen == ScreenClaudeModelPicker || m.Screen == ScreenModelPicker) {
 		m.ModelConfigMode = false
-		m.setScreen(ScreenModelConfig)
+		if m.QuickClaudePresetMode {
+			m.QuickClaudePresetMode = false
+			m.setScreen(ScreenWelcome)
+		} else {
+			m.setScreen(ScreenModelConfig)
+		}
 		return m
 	}
 
