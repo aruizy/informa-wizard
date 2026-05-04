@@ -335,20 +335,30 @@ func tuiUpgrade(profile system.PlatformProfile, homeDir string) tui.UpgradeFunc 
 // so that the "Configure Models" TUI flow persists its choices to disk.
 func tuiSync(homeDir string) tui.SyncFunc {
 	return func(overrides *model.SyncOverrides) (int, error) {
+		presetForLog := ""
+		if overrides != nil {
+			presetForLog = overrides.ClaudeModelPreset
+		}
+		logger.Info("tui sync start: claude_preset_override=%q", presetForLog)
+
 		agentIDs := cli.DiscoverAgents(homeDir)
 		selection := cli.BuildSyncSelection(cli.SyncFlags{}, agentIDs, homeDir)
 
 		applyOverrides(&selection, overrides)
 
 		result, err := cli.RunSyncWithSelection(homeDir, selection)
-		if err != nil {
-			return 0, err
-		}
-		// Persist Claude preset choice to state.json so View Installation,
-		// Health, and the next entry into the picker reflect the new value.
-		// Other state fields are preserved by reading the existing state.
-		if overrides != nil && overrides.ClaudeModelPreset != "" {
+		// Persist Claude preset to state.json whenever the pipeline actually wrote
+		// files, even if post-sync verification flagged unrelated issues. The
+		// agent files on disk already reflect the new preset; refusing to persist
+		// here just leaves state.json out of sync with reality.
+		executionWroteFiles := err == nil || result.FilesChanged > 0
+		if executionWroteFiles && overrides != nil && overrides.ClaudeModelPreset != "" {
+			logger.Info("tui sync persisting claude preset: %s (sync err=%v)", overrides.ClaudeModelPreset, err)
 			persistClaudePreset(homeDir, overrides.ClaudeModelPreset)
+		}
+		if err != nil {
+			logger.Error("tui sync RunSyncWithSelection failed: %v", err)
+			return result.FilesChanged, err
 		}
 		return result.FilesChanged, nil
 	}
@@ -360,10 +370,12 @@ func tuiSync(homeDir string) tui.SyncFunc {
 func persistClaudePreset(homeDir, preset string) {
 	s, err := state.Read(homeDir)
 	if err != nil {
+		logger.Warn("persistClaudePreset: state.Read failed (%v); writing fresh state", err)
 		// Missing or invalid state — write a fresh one with just the preset.
 		// Empty agent/component slices are acceptable: install will repopulate.
 		s = state.InstallState{}
 	}
+	logger.Info("persistClaudePreset: writing state.json with claude_preset=%s (was %s)", preset, s.InstalledClaudePreset)
 	if writeErr := state.Write(
 		homeDir,
 		s.InstalledAgents,
@@ -373,7 +385,9 @@ func persistClaudePreset(homeDir, preset string) {
 		preset,
 	); writeErr != nil {
 		logger.Warn("failed to persist Claude preset to state.json: %v", writeErr)
+		return
 	}
+	logger.Info("persistClaudePreset: wrote state.json successfully")
 }
 
 // applyOverrides merges non-nil fields from overrides into selection.
