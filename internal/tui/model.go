@@ -3345,11 +3345,24 @@ func (m Model) buildInstallationViewData() screens.InstallationViewData {
 	if cfg, err := devagents.ReadConfig(home); err == nil {
 		data.DevAgents = cfg.InstalledAgents
 	}
+	// Global Monday config.
 	if mondayData, err := os.ReadFile(filepath.Join(home, ".informa-wizard", "monday.json")); err == nil {
 		var mc mondayJSON
 		if json.Unmarshal(mondayData, &mc) == nil {
-			data.MondayToken = mc.Token
-			data.MondayBoard = mc.BoardID
+			data.GlobalMondayToken = mc.Token
+			data.GlobalMondayBoard = mc.BoardID
+		}
+	}
+	// Workspace Monday config (current working directory).
+	if cwd, err := os.Getwd(); err == nil {
+		data.WorkspacePath = cwd
+		wsPath := filepath.Join(cwd, ".informa-wizard", "monday.json")
+		if mondayData, err := os.ReadFile(wsPath); err == nil {
+			var mc mondayJSON
+			if json.Unmarshal(mondayData, &mc) == nil {
+				data.WorkspaceMondayToken = mc.Token
+				data.WorkspaceMondayBoard = mc.BoardID
+			}
 		}
 	}
 	return data

@@ -9,11 +9,14 @@ import (
 
 // InstallationViewData holds the data shown on the installation view screen.
 type InstallationViewData struct {
-	State       state.InstallState
-	MondayToken string // masked when shown
-	MondayBoard string
-	DevSkills   []string
-	DevAgents   []string
+	State                state.InstallState
+	GlobalMondayToken    string
+	GlobalMondayBoard    string
+	WorkspaceMondayToken string
+	WorkspaceMondayBoard string
+	WorkspacePath        string // current working directory shown alongside workspace config
+	DevSkills            []string
+	DevAgents            []string
 }
 
 // RenderInstallationView shows what the user installed.
@@ -61,18 +64,6 @@ func RenderInstallationView(data InstallationViewData) string {
 	}
 	b.WriteString("\n")
 
-	// Skills
-	b.WriteString(styles.HeadingStyle.Render("Skills"))
-	b.WriteString("\n")
-	if len(data.State.InstalledSkills) == 0 {
-		b.WriteString(styles.SubtextStyle.Render("  (none)") + "\n")
-	} else {
-		for _, s := range data.State.InstalledSkills {
-			b.WriteString("  • " + s + "\n")
-		}
-	}
-	b.WriteString("\n")
-
 	// Dev Skills (from dev-skills.json)
 	b.WriteString(styles.HeadingStyle.Render("Dev Skills"))
 	b.WriteString("\n")
@@ -97,18 +88,49 @@ func RenderInstallationView(data InstallationViewData) string {
 	}
 	b.WriteString("\n")
 
-	// Monday config
+	// Monday config — show both global and workspace.
 	b.WriteString(styles.HeadingStyle.Render("Monday"))
 	b.WriteString("\n")
-	if data.MondayToken == "" && data.MondayBoard == "" {
-		b.WriteString(styles.SubtextStyle.Render("  (not configured)") + "\n")
+
+	// Global
+	b.WriteString("  " + styles.HeadingStyle.Render("Global"))
+	b.WriteString("\n")
+	if data.GlobalMondayToken == "" && data.GlobalMondayBoard == "" {
+		b.WriteString(styles.SubtextStyle.Render("    (not configured)") + "\n")
 	} else {
-		mask := "(empty)"
-		if data.MondayToken != "" {
-			mask = strings.Repeat("*", 12)
+		token := "(empty)"
+		if data.GlobalMondayToken != "" {
+			token = strings.Repeat("*", 12)
 		}
-		b.WriteString("  Token: " + mask + "\n")
-		b.WriteString("  Board: " + data.MondayBoard + "\n")
+		b.WriteString("    Token: " + token + "\n")
+		board := data.GlobalMondayBoard
+		if board == "" {
+			board = "(empty)"
+		}
+		b.WriteString("    Board: " + board + "\n")
+	}
+	b.WriteString("\n")
+
+	// Workspace
+	wsLabel := "Workspace"
+	if data.WorkspacePath != "" {
+		wsLabel = "Workspace (" + data.WorkspacePath + ")"
+	}
+	b.WriteString("  " + styles.HeadingStyle.Render(wsLabel))
+	b.WriteString("\n")
+	if data.WorkspaceMondayToken == "" && data.WorkspaceMondayBoard == "" {
+		b.WriteString(styles.SubtextStyle.Render("    (not configured)") + "\n")
+	} else {
+		token := "(empty)"
+		if data.WorkspaceMondayToken != "" {
+			token = strings.Repeat("*", 12)
+		}
+		b.WriteString("    Token: " + token + "\n")
+		board := data.WorkspaceMondayBoard
+		if board == "" {
+			board = "(empty)"
+		}
+		b.WriteString("    Board: " + board + "\n")
 	}
 
 	b.WriteString("\n")

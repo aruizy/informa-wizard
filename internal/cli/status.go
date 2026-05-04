@@ -49,9 +49,6 @@ func RunStatus(homeDir string) error {
 	// Components
 	printSection("Components", s.InstalledComponents)
 
-	// Skills
-	printSection("Skills", s.InstalledSkills)
-
 	// Dev Skills
 	devSkillsCfg, _ := devskills.ReadConfig(homeDir)
 	printSection("Dev Skills", devSkillsCfg.InstalledSkills)
@@ -60,32 +57,39 @@ func RunStatus(homeDir string) error {
 	devAgentsCfg, _ := devagents.ReadConfig(homeDir)
 	printSection("Dev Agents", devAgentsCfg.InstalledAgents)
 
-	// Monday config
+	// Monday config — show both global and workspace.
 	fmt.Println("Monday:")
-	mondayPath := filepath.Join(homeDir, ".informa-wizard", "monday.json")
-	data, err := os.ReadFile(mondayPath)
-	if err != nil {
-		fmt.Println("  (not configured)")
-	} else {
-		var mc mondayStatusJSON
-		if jsonErr := json.Unmarshal(data, &mc); jsonErr != nil {
-			fmt.Println("  (malformed config)")
-		} else {
-			tokenDisplay := "(empty)"
-			if mc.Token != "" {
-				tokenDisplay = strings.Repeat("*", 12) + " (configured)"
-			}
-			boardDisplay := mc.BoardID
-			if boardDisplay == "" {
-				boardDisplay = "(none)"
-			}
-			fmt.Printf("  Token: %s\n", tokenDisplay)
-			fmt.Printf("  Board: %s\n", boardDisplay)
-		}
+	printMondayScope("  Global", filepath.Join(homeDir, ".informa-wizard", "monday.json"))
+	if cwd, err := os.Getwd(); err == nil {
+		printMondayScope("  Workspace ("+cwd+")", filepath.Join(cwd, ".informa-wizard", "monday.json"))
 	}
 	fmt.Println()
 
 	return nil
+}
+
+func printMondayScope(label, path string) {
+	fmt.Printf("%s:\n", label)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Println("    (not configured)")
+		return
+	}
+	var mc mondayStatusJSON
+	if jsonErr := json.Unmarshal(data, &mc); jsonErr != nil {
+		fmt.Println("    (malformed config)")
+		return
+	}
+	tokenDisplay := "(empty)"
+	if mc.Token != "" {
+		tokenDisplay = strings.Repeat("*", 12)
+	}
+	boardDisplay := mc.BoardID
+	if boardDisplay == "" {
+		boardDisplay = "(empty)"
+	}
+	fmt.Printf("    Token: %s\n", tokenDisplay)
+	fmt.Printf("    Board: %s\n", boardDisplay)
 }
 
 func printSection(title string, items []string) {
