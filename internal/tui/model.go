@@ -3246,6 +3246,12 @@ func (m Model) saveMondayConfig() {
 		path = mondayWorkspaceConfigPath()
 	} else {
 		path = mondayConfigPath()
+		// User explicitly chose "global". Remove any workspace override
+		// in the current working directory so the next load reflects the
+		// user's choice (workspace > global precedence would otherwise mask it).
+		if wsPath := mondayWorkspaceConfigPath(); wsPath != "" {
+			_ = os.Remove(wsPath)
+		}
 	}
 	if path == "" {
 		return
