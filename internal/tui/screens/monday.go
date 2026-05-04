@@ -88,7 +88,10 @@ func RenderMonday(token, boardID string, activeField MondayField, cursorPos int,
 
 // renderTextInput renders a single-line text input with cursor.
 // When masked is true and the field is unfocused, the value is replaced with asterisks.
+// Long inputs scroll horizontally so the cursor stays visible.
 func renderTextInput(value string, focused bool, cursorPos int, masked bool) string {
+	const windowWidth = 60 // visible character window
+
 	if !focused {
 		display := value
 		if display == "" {
@@ -96,20 +99,51 @@ func renderTextInput(value string, focused bool, cursorPos int, masked bool) str
 		} else if masked {
 			display = strings.Repeat("*", len([]rune(display)))
 		}
+		// Truncate the unfocused view too if very long.
+		runes := []rune(display)
+		if len(runes) > windowWidth {
+			display = "…" + string(runes[len(runes)-windowWidth+1:])
+		}
 		return styles.UnselectedStyle.Render("  " + display)
 	}
 
 	runes := []rune(value)
+	// Compute scroll offset so the cursor stays inside [offset, offset+windowWidth].
+	offset := 0
+	if len(runes) > windowWidth {
+		// Keep cursor about 5 chars from the right edge when typing forward.
+		desired := cursorPos - (windowWidth - 5)
+		if desired > offset {
+			offset = desired
+		}
+		if offset > len(runes)-windowWidth {
+			offset = len(runes) - windowWidth
+		}
+		if offset < 0 {
+			offset = 0
+		}
+	}
+	end := offset + windowWidth
+	if end > len(runes) {
+		end = len(runes)
+	}
+
 	var b strings.Builder
 	b.WriteString("  > ")
-	for i, r := range runes {
+	if offset > 0 {
+		b.WriteString("…")
+	}
+	for i := offset; i < end; i++ {
 		if i == cursorPos {
 			b.WriteString(styles.SelectedStyle.Render("|"))
 		}
-		b.WriteRune(r)
+		b.WriteRune(runes[i])
 	}
-	if cursorPos >= len(runes) {
+	if cursorPos >= end {
 		b.WriteString(styles.SelectedStyle.Render("|"))
+	}
+	if end < len(runes) {
+		b.WriteString("…")
 	}
 	return b.String()
 }
