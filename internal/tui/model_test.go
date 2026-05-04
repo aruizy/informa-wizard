@@ -823,7 +823,7 @@ func TestUpgradeSyncPreviewCancellation(t *testing.T) {
 	}
 }
 
-// ─── T16: Welcome screen 7-item menu navigation ────────────────────────────
+// ─── T16: Welcome screen menu navigation ───────────────────────────────────
 
 // TestWelcomeMenu_InstallNavigation verifies cursor 0 (Install) leads forward in the flow.
 // When no prior install exists: goes to ScreenDetection.
@@ -2854,5 +2854,53 @@ func TestPinErrClearedOnScreenReentry(t *testing.T) {
 	// PinErr must be cleared on re-entry.
 	if afterReturn.PinErr != nil {
 		t.Fatalf("PinErr should be nil after returning to ScreenBackups, got: %v", afterReturn.PinErr)
+	}
+}
+
+// ─── Switch Claude preset shortcut ─────────────────────────────────────────
+
+// TestWelcomeMenu_SwitchClaudePresetShortcut verifies that pressing Enter on
+// the "Switch Claude preset" welcome menu item (cursor 7) jumps directly to
+// ScreenClaudeModelPicker with both ModelConfigMode and QuickClaudePresetMode
+// set to true so the back path returns to ScreenWelcome (not ScreenModelConfig).
+func TestWelcomeMenu_SwitchClaudePresetShortcut(t *testing.T) {
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenWelcome
+	m.Cursor = 7
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	state := updated.(Model)
+
+	if state.Screen != ScreenClaudeModelPicker {
+		t.Fatalf("cursor=7 (Switch Claude preset): screen = %v, want %v", state.Screen, ScreenClaudeModelPicker)
+	}
+	if !state.ModelConfigMode {
+		t.Errorf("ModelConfigMode = false, want true")
+	}
+	if !state.QuickClaudePresetMode {
+		t.Errorf("QuickClaudePresetMode = false, want true")
+	}
+}
+
+// TestQuickClaudePresetMode_GoBackReturnsToWelcome verifies that the goBack
+// path (Esc key) from ScreenClaudeModelPicker with QuickClaudePresetMode set
+// returns to ScreenWelcome and clears both flags.
+func TestQuickClaudePresetMode_GoBackReturnsToWelcome(t *testing.T) {
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenClaudeModelPicker
+	m.ModelConfigMode = true
+	m.QuickClaudePresetMode = true
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	state := updated.(Model)
+
+	if state.Screen != ScreenWelcome {
+		t.Fatalf("goBack from QuickClaudePresetMode: screen = %v, want %v", state.Screen, ScreenWelcome)
+	}
+	if state.ModelConfigMode {
+		t.Errorf("ModelConfigMode = true after goBack, want false")
+	}
+	if state.QuickClaudePresetMode {
+		t.Errorf("QuickClaudePresetMode = true after goBack, want false")
 	}
 }

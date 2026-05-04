@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -347,12 +348,13 @@ func tuiSync(homeDir string) tui.SyncFunc {
 		applyOverrides(&selection, overrides)
 
 		result, err := cli.RunSyncWithSelection(homeDir, selection)
-		// Persist Claude preset to state.json whenever the pipeline actually wrote
-		// files, even if post-sync verification flagged unrelated issues. The
-		// agent files on disk already reflect the new preset; refusing to persist
-		// here just leaves state.json out of sync with reality.
-		executionWroteFiles := err == nil || result.FilesChanged > 0
-		if executionWroteFiles && overrides != nil && overrides.ClaudeModelPreset != "" {
+		// Persist Claude preset to state.json only when the pipeline actually
+		// wrote files reflecting the new preset. RunSyncWithSelection enforces
+		// `FilesChanged == 0 ⇒ NoOp == true` on success (sync.go:812), so this
+		// single condition correctly excludes both NoOp paths and partial-failure
+		// paths where rollback left no files written.
+		shouldPersist := overrides != nil && overrides.ClaudeModelPreset != "" && result.FilesChanged > 0
+		if shouldPersist {
 			logger.Info("tui sync persisting claude preset: %s (sync err=%v)", overrides.ClaudeModelPreset, err)
 			persistClaudePreset(homeDir, overrides.ClaudeModelPreset)
 		}
@@ -365,14 +367,19 @@ func tuiSync(homeDir string) tui.SyncFunc {
 }
 
 // persistClaudePreset rewrites state.json with the new Claude preset, leaving
-// all other fields untouched. Read errors (missing/invalid state) are logged
-// but non-fatal: the sync itself already succeeded.
+// all other fields untouched. Read errors are handled defensively:
+//   - state.json missing → write a fresh state with just the preset (install repopulates).
+//   - state.json exists but failed to read/validate → DO NOT overwrite; preserve existing data on disk.
 func persistClaudePreset(homeDir, preset string) {
 	s, err := state.Read(homeDir)
 	if err != nil {
-		logger.Warn("persistClaudePreset: state.Read failed (%v); writing fresh state", err)
-		// Missing or invalid state — write a fresh one with just the preset.
-		// Empty agent/component slices are acceptable: install will repopulate.
+		// If state.json exists but failed to read/validate, refuse to overwrite —
+		// otherwise we'd wipe the user's installed agents/components/skills metadata.
+		if !errors.Is(err, fs.ErrNotExist) && !os.IsNotExist(err) {
+			logger.Warn("persistClaudePreset: state.Read failed (%v); refusing to overwrite existing state.json", err)
+			return
+		}
+		logger.Info("persistClaudePreset: state.json not found; writing fresh state with preset only")
 		s = state.InstallState{}
 	}
 	logger.Info("persistClaudePreset: writing state.json with claude_preset=%s (was %s)", preset, s.InstalledClaudePreset)

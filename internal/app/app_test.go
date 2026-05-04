@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/backup"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/state"
 )
 
 // TestListBackupsNewestFirst verifies that ListBackups returns manifests sorted
@@ -286,6 +288,164 @@ func TestTuiSyncStrictTDDNilOverrideNoChange(t *testing.T) {
 }
 
 func boolPtr(b bool) *bool { return &b }
+
+// ─── ClaudeModelPreset override propagation ────────────────────────────────
+
+// TestApplyOverrides_AppliesClaudeModelPreset verifies that a non-empty
+// ClaudeModelPreset override is merged into the selection, while an empty
+// override leaves the selection's existing value unchanged.
+func TestApplyOverrides_AppliesClaudeModelPreset(t *testing.T) {
+	cases := []struct {
+		name             string
+		startingPreset   string
+		overridePreset   string
+		wantPreset       string
+	}{
+		{
+			name:           "empty override preserves existing",
+			startingPreset: "balanced",
+			overridePreset: "",
+			wantPreset:     "balanced",
+		},
+		{
+			name:           "balanced override applied",
+			startingPreset: "",
+			overridePreset: "balanced",
+			wantPreset:     "balanced",
+		},
+		{
+			name:           "performance override applied",
+			startingPreset: "balanced",
+			overridePreset: "performance",
+			wantPreset:     "performance",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			selection := model.Selection{ClaudeModelPreset: tc.startingPreset}
+			overrides := &model.SyncOverrides{ClaudeModelPreset: tc.overridePreset}
+
+			applyOverrides(&selection, overrides)
+
+			if selection.ClaudeModelPreset != tc.wantPreset {
+				t.Errorf("ClaudeModelPreset = %q, want %q", selection.ClaudeModelPreset, tc.wantPreset)
+			}
+		})
+	}
+}
+
+// ─── persistClaudePreset state preservation ─────────────────────────────────
+
+// TestPersistClaudePreset_PreservesExistingFields verifies that calling
+// persistClaudePreset on a state.json with populated agents/components/skills
+// only mutates the claude_preset field — all other install metadata is kept.
+func TestPersistClaudePreset_PreservesExistingFields(t *testing.T) {
+	home := t.TempDir()
+
+	// Seed a populated state.json that passes Validate.
+	if err := state.Write(
+		home,
+		[]string{"claude-code", "opencode"},
+		[]string{"engram", "sdd"},
+		[]string{"go-testing"},
+		"full",
+		"balanced",
+	); err != nil {
+		t.Fatalf("seed state.Write: %v", err)
+	}
+
+	persistClaudePreset(home, "performance")
+
+	got, err := state.Read(home)
+	if err != nil {
+		t.Fatalf("state.Read after persist: %v", err)
+	}
+
+	// claude_preset must be the new value.
+	if got.InstalledClaudePreset != "performance" {
+		t.Errorf("InstalledClaudePreset = %q, want %q", got.InstalledClaudePreset, "performance")
+	}
+	// All other fields must be untouched.
+	if !equalStrings(got.InstalledAgents, []string{"claude-code", "opencode"}) {
+		t.Errorf("InstalledAgents = %v, want preserved [claude-code opencode]", got.InstalledAgents)
+	}
+	if !equalStrings(got.InstalledComponents, []string{"engram", "sdd"}) {
+		t.Errorf("InstalledComponents = %v, want preserved [engram sdd]", got.InstalledComponents)
+	}
+	if !equalStrings(got.InstalledSkills, []string{"go-testing"}) {
+		t.Errorf("InstalledSkills = %v, want preserved [go-testing]", got.InstalledSkills)
+	}
+	if got.InstalledPreset != "full" {
+		t.Errorf("InstalledPreset = %q, want preserved %q", got.InstalledPreset, "full")
+	}
+}
+
+// TestPersistClaudePreset_DoesNotWipeOnReadError verifies the critical
+// invariant: if state.Read returns an error (here triggered by an invalid
+// installed_preset that fails Validate), persistClaudePreset must NOT
+// overwrite the existing state.json. Otherwise the user's installed agent
+// metadata would be silently wiped.
+func TestPersistClaudePreset_DoesNotWipeOnReadError(t *testing.T) {
+	home := t.TempDir()
+
+	stateDir := filepath.Join(home, ".informa-wizard")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	statePath := filepath.Join(stateDir, "state.json")
+
+	// Write a state.json that decodes but fails Validate (unknown preset).
+	// The fields must be otherwise plausible so we can detect overwrite.
+	originalJSON := `{
+  "installed_agents": ["claude-code"],
+  "installed_components": ["engram"],
+  "installed_skills": ["go-testing"],
+  "installed_preset": "bogus-preset-that-will-fail-validate",
+  "installed_claude_preset": "balanced"
+}
+`
+	if err := os.WriteFile(statePath, []byte(originalJSON), 0o644); err != nil {
+		t.Fatalf("write seed: %v", err)
+	}
+
+	// Confirm Read fails (invariant for the test setup).
+	if _, err := state.Read(home); err == nil {
+		t.Fatalf("expected state.Read to fail validation, got nil")
+	}
+
+	persistClaudePreset(home, "performance")
+
+	// Raw bytes must be UNCHANGED — function must refuse to overwrite.
+	got, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read state.json: %v", err)
+	}
+	if string(got) != originalJSON {
+		t.Fatalf("state.json was modified despite read error.\noriginal:\n%s\nafter:\n%s", originalJSON, string(got))
+	}
+
+	// Sanity: parse and check no field was wiped.
+	var parsed map[string]any
+	if err := json.Unmarshal(got, &parsed); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if agents, ok := parsed["installed_agents"].([]any); !ok || len(agents) != 1 {
+		t.Errorf("installed_agents wiped or missing; got: %v", parsed["installed_agents"])
+	}
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
 
 // TestVersionBeforeSystemGuards verifies that `informa-wizard version` returns the
 // version string without going through system detection or platform guards.

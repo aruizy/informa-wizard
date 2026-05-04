@@ -1164,43 +1164,46 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 		case 6:
 			// "Configure models"
 			m.setScreen(ScreenModelConfig)
-		case 7:
-			// "Switch Claude preset" — shortcut straight to ClaudeModelPicker.
-			// Seed the picker with the currently installed preset so the user
-			// enters with their existing choice highlighted.
-			var currentPreset string
-			if homeDir, hdErr := os.UserHomeDir(); hdErr == nil {
-				if s, err := state.Read(homeDir); err == nil {
-					currentPreset = s.InstalledClaudePreset
-				}
-			}
-			m.ModelConfigMode = true
-			m.QuickClaudePresetMode = true
-			m.ClaudeModelPicker = screens.NewClaudeModelPickerStateForPreset(currentPreset)
-			m.setScreen(ScreenClaudeModelPicker)
-			m.Cursor = screens.IndexOfClaudePreset(currentPreset)
-		case 8:
-			// "Create your own Agent" — blocked when no engines are available.
-			if !m.hasAgentBuilderEngines() {
-				return m, nil
-			}
-			m.AgentBuilder = AgentBuilderState{}
-			m.AgentBuilder.AvailableEngines = m.detectAgentBuilderEngines()
-			ta := textarea.New()
-			ta.Placeholder = "Describe what you want your agent to do..."
-			ta.Focus()
-			ta.SetWidth(60)
-			ta.SetHeight(5)
-			m.AgentBuilder.Textarea = ta
-			m.setScreen(ScreenAgentBuilderEngine)
 		default:
-			// Handle dynamic positions that depend on whether profiles are shown.
+			// Cases 0..6 above are stable positions. Everything from cursor 7
+			// onward (Switch Claude preset, Create your own Agent, OpenCode SDD
+			// Profiles, Manage backups, Quit) is dispatched by LABEL so future
+			// menu reordering or insertions don't silently route to wrong actions.
 			opts := screens.WelcomeOptions(m.hasDetectedOpenCode(), len(m.ProfileList), m.hasAgentBuilderEngines())
 			if m.Cursor >= len(opts) {
 				break
 			}
 			label := opts[m.Cursor]
 			switch {
+			case label == "Switch Claude preset":
+				// Shortcut straight to ClaudeModelPicker. Seed the picker with
+				// the currently installed preset so the user enters with their
+				// existing choice highlighted.
+				var currentPreset string
+				if homeDir, hdErr := os.UserHomeDir(); hdErr == nil {
+					if s, err := state.Read(homeDir); err == nil {
+						currentPreset = s.InstalledClaudePreset
+					}
+				}
+				m.ModelConfigMode = true
+				m.QuickClaudePresetMode = true
+				m.ClaudeModelPicker = screens.NewClaudeModelPickerStateForPreset(currentPreset)
+				m.setScreen(ScreenClaudeModelPicker)
+				m.Cursor = screens.IndexOfClaudePreset(currentPreset)
+			case strings.HasPrefix(label, "Create your own Agent"):
+				// Handles both "Create your own Agent" and "Create your own Agent (no agents)".
+				if !m.hasAgentBuilderEngines() {
+					return m, nil
+				}
+				m.AgentBuilder = AgentBuilderState{}
+				m.AgentBuilder.AvailableEngines = m.detectAgentBuilderEngines()
+				ta := textarea.New()
+				ta.Placeholder = "Describe what you want your agent to do..."
+				ta.Focus()
+				ta.SetWidth(60)
+				ta.SetHeight(5)
+				m.AgentBuilder.Textarea = ta
+				m.setScreen(ScreenAgentBuilderEngine)
 			case label == "Manage backups":
 				m.setScreen(ScreenBackups)
 			case label == "Quit":
@@ -1353,9 +1356,19 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 	case ScreenModelConfig:
 		switch m.Cursor {
 		case 0: // Configure Claude models
+			// Mirror the welcome "Switch Claude preset" shortcut: seed the picker
+			// with the user's currently installed preset so they enter with their
+			// existing choice highlighted instead of always defaulting to balanced.
+			var currentPreset string
+			if homeDir, hdErr := os.UserHomeDir(); hdErr == nil {
+				if s, err := state.Read(homeDir); err == nil {
+					currentPreset = s.InstalledClaudePreset
+				}
+			}
 			m.ModelConfigMode = true
-			m.ClaudeModelPicker = screens.NewClaudeModelPickerState()
+			m.ClaudeModelPicker = screens.NewClaudeModelPickerStateForPreset(currentPreset)
 			m.setScreen(ScreenClaudeModelPicker)
+			m.Cursor = screens.IndexOfClaudePreset(currentPreset)
 		case 1: // Configure OpenCode models
 			m.ModelConfigMode = true
 			cachePath := opencode.DefaultCachePath()
