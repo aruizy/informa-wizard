@@ -291,6 +291,9 @@ type Model struct {
 	MondayBoardPos      int
 	MondayActiveField   screens.MondayField
 	MondayValidationErr error
+	// MondayDirty is true while the user has unsaved edits in the Monday config.
+	// Reset on Save (Enter) or Discard (Esc).
+	MondayDirty bool
 	// MondaySaveScope controls where monday.json is written: "global" (default)
 	// or "workspace" (current working directory).
 	MondaySaveScope string
@@ -1111,8 +1114,10 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			}
 			m.setScreen(ScreenHealth)
 		case 5:
-			// "Configure Monday" — load existing config if available.
+			// "Configure Monday" — load existing config and start at Token field.
 			m.loadMondayConfig()
+			m.MondayActiveField = screens.MondayFieldToken
+			m.MondayValidationErr = nil
 			m.setScreen(ScreenMonday)
 		case 6:
 			// "Configure models"
@@ -2509,9 +2514,18 @@ func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.Selection.Monday.BoardID = m.MondayBoardInput
 		m.saveMondayConfig()
 		m.injectMondayMCP()
+		m.MondayDirty = false
 		m.setScreen(ScreenWelcome)
 		return m, nil
 	case tea.KeyEsc:
+		// Discard unsaved changes: clear in-memory inputs so next entry
+		// reloads from disk.
+		m.MondayTokenInput = ""
+		m.MondayBoardInput = ""
+		m.MondayTokenPos = 0
+		m.MondayBoardPos = 0
+		m.MondayValidationErr = nil
+		m.MondayDirty = false
 		m.setScreen(ScreenWelcome)
 		return m, nil
 	case tea.KeyTab:
@@ -2540,6 +2554,7 @@ func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil // ignore other keys on scope field
 		}
 		m.MondayValidationErr = nil
+		m.MondayDirty = true
 		if m.MondayActiveField == screens.MondayFieldToken {
 			runes := []rune(m.MondayTokenInput)
 			newRunes := make([]rune, 0, len(runes)+len(msg.Runes))
@@ -2560,6 +2575,7 @@ func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyBackspace:
 		m.MondayValidationErr = nil
+		m.MondayDirty = true
 		if m.MondayActiveField == screens.MondayFieldToken {
 			if m.MondayTokenPos > 0 {
 				runes := []rune(m.MondayTokenInput)
