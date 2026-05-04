@@ -2503,8 +2503,9 @@ func (m Model) handleRenameInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyEnter:
-		// Validate the token before saving (skip if empty).
-		if err := monday.ValidateToken(m.MondayTokenInput); err != nil {
+		// Validate the token. Network failures are non-fatal (save anyway with warning).
+		// Only an explicit "invalid token" rejection blocks the save.
+		if err := monday.ValidateToken(m.MondayTokenInput); err != nil && !monday.IsNetworkError(err) {
 			m.MondayValidationErr = err
 			return m, nil
 		}

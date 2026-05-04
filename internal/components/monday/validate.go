@@ -3,6 +3,7 @@ package monday
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,7 +11,16 @@ import (
 )
 
 const mondayAPIURL = "https://api.monday.com/v2"
-const validateTimeout = 5 * time.Second
+const validateTimeout = 10 * time.Second
+
+// ErrNetwork wraps any network-related failure during token validation.
+// Callers can choose to treat this as non-fatal (e.g. save anyway, warn user).
+var ErrNetwork = errors.New("network unreachable")
+
+// IsNetworkError reports whether err is a network failure during validation.
+func IsNetworkError(err error) bool {
+	return errors.Is(err, ErrNetwork)
+}
 
 // ValidateToken verifies that the given Monday.com API token is valid by
 // calling the Monday GraphQL API with a lightweight query.
@@ -32,7 +42,7 @@ func ValidateToken(token string) error {
 	client := &http.Client{Timeout: validateTimeout}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("connection failed (check your network)")
+		return fmt.Errorf("%w: %v", ErrNetwork, err)
 	}
 	defer resp.Body.Close()
 
