@@ -32,29 +32,42 @@ func ValidateToken(token string) error {
 	client := &http.Client{Timeout: validateTimeout}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("connection failed: %w", err)
+		return fmt.Errorf("connection failed (check your network)")
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("API returned status %d — check your token", resp.StatusCode)
-	}
+	respBody, _ := io.ReadAll(resp.Body)
 
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("read response: %w", err)
-	}
-
+	// Try to extract Monday's error message even on non-200 responses.
 	var result struct {
-		Data   *struct{ Me *struct{ ID any `json:"id"` } } `json:"data"`
-		Errors []any                                        `json:"errors"`
+		Data *struct {
+			Me *struct {
+				ID any `json:"id"`
+			}
+		} `json:"data"`
+		Errors []struct {
+			Message    string `json:"message"`
+			Extensions struct {
+				Code string `json:"code"`
+			} `json:"extensions"`
+		} `json:"errors"`
 	}
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return fmt.Errorf("invalid JSON response: %w", err)
-	}
+	_ = json.Unmarshal(respBody, &result)
 
 	if len(result.Errors) > 0 {
-		return fmt.Errorf("token rejected by Monday API")
+		msg := result.Errors[0].Message
+		code := result.Errors[0].Extensions.Code
+		if code == "NOT_AUTHENTICATED" || resp.StatusCode == http.StatusUnauthorized {
+			return fmt.Errorf("invalid token — Monday rejected it as not authenticated")
+		}
+		if msg != "" {
+			return fmt.Errorf("Monday API: %s", msg)
+		}
+		return fmt.Errorf("Monday API rejected the request")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("Monday API returned status %d — check your token", resp.StatusCode)
 	}
 
 	if result.Data == nil || result.Data.Me == nil {
