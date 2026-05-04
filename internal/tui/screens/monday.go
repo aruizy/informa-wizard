@@ -10,69 +10,105 @@ import (
 type MondayField int
 
 const (
-	MondayFieldToken   MondayField = 0
-	MondayFieldBoardID MondayField = 1
-	MondayFieldScope   MondayField = 2
+	MondayFieldToken MondayField = 0
+	MondayFieldTabs  MondayField = 1
+	MondayFieldBoard MondayField = 2
 )
 
-// RenderMonday renders the Monday.com configuration screen with two text inputs,
-// a save-scope toggle, and an optional validation error.
-func RenderMonday(token, boardID string, activeField MondayField, cursorPos int, validationErr error, saveScope string) string {
+// RenderMonday renders the Monday.com configuration screen with:
+//   - a shared token input
+//   - a tab row to switch between global and workspace config
+//   - a board ID input for the active tab
+//   - status indicators per scope
+//   - an optional validation error
+func RenderMonday(
+	token string,
+	globalBoard string,
+	workspaceBoard string,
+	activeField MondayField,
+	activeTab string,
+	tokenPos int,
+	globalBoardPos int,
+	workspaceBoardPos int,
+	validationErr error,
+) string {
 	var b strings.Builder
 
 	b.WriteString(styles.TitleStyle.Render("Monday.com Configuration"))
 	b.WriteString("\n\n")
-	b.WriteString(styles.SubtextStyle.Render("Configure your Monday.com integration for task management."))
-	b.WriteString("\n\n")
 
-	// Token field
-	tokenLabel := "API Token:"
+	// ── Token field ───────────────────────────────────────────────────────
+	tokenLabel := "  API Token (shared between both configs):"
 	if activeField == MondayFieldToken {
-		tokenLabel = "▸ API Token:"
-	} else {
-		tokenLabel = "  API Token:"
+		tokenLabel = "▸ API Token (shared between both configs):"
 	}
 	b.WriteString(styles.HeadingStyle.Render(tokenLabel))
 	b.WriteString("\n")
 	b.WriteString(styles.SubtextStyle.Render("  Get yours at: https://informadb.monday.com/apps/manage/tokens"))
 	b.WriteString("\n")
-	b.WriteString(renderTextInput(token, activeField == MondayFieldToken, cursorPos, true))
+	b.WriteString(renderTextInput(token, activeField == MondayFieldToken, tokenPos, true))
 	b.WriteString("\n\n")
 
-	// Board ID field
-	boardLabel := "Board ID:"
-	if activeField == MondayFieldBoardID {
-		boardLabel = "▸ Board ID:"
-	} else {
-		boardLabel = "  Board ID:"
+	b.WriteString(styles.SubtextStyle.Render(strings.Repeat("─", 50)))
+	b.WriteString("\n")
+
+	// ── Tab row ───────────────────────────────────────────────────────────
+	tabPrefix := "  "
+	if activeField == MondayFieldTabs {
+		tabPrefix = "▸ "
 	}
-	b.WriteString(styles.HeadingStyle.Render(boardLabel))
+
+	globalStatus := configStatus(token, globalBoard)
+	workspaceStatus := configStatus(token, workspaceBoard)
+
+	var globalTab, workspaceTab string
+	if activeTab == "workspace" {
+		globalTab = styles.SubtextStyle.Render("[Global]")
+		workspaceTab = styles.SelectedStyle.Render("[Workspace]")
+	} else {
+		globalTab = styles.SelectedStyle.Render("[Global]")
+		workspaceTab = styles.SubtextStyle.Render("[Workspace]")
+	}
+
+	b.WriteString(tabPrefix + globalTab + "       " + workspaceTab)
+	b.WriteString("\n")
+
+	// Status line under each tab label (aligned roughly).
+	b.WriteString(styles.SubtextStyle.Render("  status: " + globalStatus))
+	b.WriteString("     ")
+	b.WriteString(styles.SubtextStyle.Render("status: " + workspaceStatus))
+	b.WriteString("\n\n")
+
+	// ── Board ID field for the active tab ─────────────────────────────────
+	var boardLabel string
+	var boardValue string
+	var boardPos int
+	if activeTab == "workspace" {
+		boardLabel = "Board ID for Workspace config:"
+		boardValue = workspaceBoard
+		boardPos = workspaceBoardPos
+	} else {
+		boardLabel = "Board ID for Global config:"
+		boardValue = globalBoard
+		boardPos = globalBoardPos
+	}
+	fullBoardLabel := "  " + boardLabel
+	if activeField == MondayFieldBoard {
+		fullBoardLabel = "▸ " + boardLabel
+	}
+	b.WriteString(styles.HeadingStyle.Render(fullBoardLabel))
 	b.WriteString("\n")
 	b.WriteString(styles.SubtextStyle.Render("  From board URL: https://informadb.monday.com/boards/{BOARD_ID}/views/..."))
 	b.WriteString("\n")
-	b.WriteString(renderTextInput(boardID, activeField == MondayFieldBoardID, cursorPos, false))
+	b.WriteString(renderTextInput(boardValue, activeField == MondayFieldBoard, boardPos, false))
 	b.WriteString("\n\n")
 
-	// Save scope toggle
-	scopeLabel := "Save to:"
-	if activeField == MondayFieldScope {
-		scopeLabel = "▸ Save to:"
-	} else {
-		scopeLabel = "  Save to:"
-	}
-	b.WriteString(styles.HeadingStyle.Render(scopeLabel))
+	b.WriteString(styles.SubtextStyle.Render("Workspace overrides global for this project when set."))
 	b.WriteString("\n")
-	globalMark := "[ ]"
-	workspaceMark := "[ ]"
-	if saveScope == "workspace" {
-		workspaceMark = "[x]"
-	} else {
-		globalMark = "[x]"
-	}
-	b.WriteString("  " + globalMark + " global  " + workspaceMark + " this workspace")
+	b.WriteString(styles.SubtextStyle.Render(strings.Repeat("─", 50)))
 	b.WriteString("\n\n")
 
-	// Warnings
+	// ── Validation / warning ──────────────────────────────────────────────
 	if validationErr != nil {
 		b.WriteString(styles.WarningStyle.Render("Token validation failed: " + validationErr.Error()))
 		b.WriteString("\n\n")
@@ -81,9 +117,19 @@ func RenderMonday(token, boardID string, activeField MondayField, cursorPos int,
 		b.WriteString("\n\n")
 	}
 
-	b.WriteString(styles.HelpStyle.Render("tab: next field • space: toggle scope (when on Save to) • enter: continue • esc: back"))
+	b.WriteString(styles.HelpStyle.Render("tab: next field • ←/→: switch tab (when on tab row) • enter: save • esc: discard"))
 
 	return b.String()
+}
+
+// configStatus returns a short human-readable status string for one scope.
+// "✓ configured" when both the shared token and the scope's board are set;
+// "✗ not configured" otherwise.
+func configStatus(token, board string) string {
+	if token != "" && board != "" {
+		return "✓ configured"
+	}
+	return "✗ not configured"
 }
 
 // renderTextInput renders a single-line text input with cursor.

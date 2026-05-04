@@ -285,18 +285,19 @@ type Model struct {
 	BackupRenamePos int
 
 	// Monday.com configuration input state.
-	MondayTokenInput    string
-	MondayTokenPos      int
-	MondayBoardInput    string
-	MondayBoardPos      int
-	MondayActiveField   screens.MondayField
+	MondayTokenInput          string
+	MondayTokenPos            int
+	MondayGlobalBoardInput    string
+	MondayGlobalBoardPos      int
+	MondayWorkspaceBoardInput string
+	MondayWorkspaceBoardPos   int
+	MondayActiveField         screens.MondayField
+	// MondayActiveTab is "global" or "workspace" — selects which board input is shown.
+	MondayActiveTab     string
 	MondayValidationErr error
 	// MondayDirty is true while the user has unsaved edits in the Monday config.
 	// Reset on Save (Enter) or Discard (Esc).
 	MondayDirty bool
-	// MondaySaveScope controls where monday.json is written: "global" (default)
-	// or "workspace" (current working directory).
-	MondaySaveScope string
 
 	// Health check state.
 	HealthReport cli.Report
@@ -426,8 +427,8 @@ func NewModel(detection system.DetectionResult, version string) Model {
 		Version:         version,
 		Selection:       selection,
 		Detection:       detection,
-		MondaySaveScope: "global",
-		CommitDate: resolveCommitDate(),
+		MondayActiveTab: "global",
+		CommitDate:      resolveCommitDate(),
 		Progress: NewProgressState([]string{
 			"Install dependencies",
 			"Configure selected agents",
@@ -731,7 +732,17 @@ func (m Model) View() string {
 	case ScreenInstallOverwriteWarn:
 		return screens.RenderInstallOverwriteWarn(m.OverwriteWarnState, m.OverwriteWarnCursor)
 	case ScreenMonday:
-		return screens.RenderMonday(m.MondayTokenInput, m.MondayBoardInput, m.MondayActiveField, mondayCursorPos(m), m.MondayValidationErr, m.MondaySaveScope)
+		return screens.RenderMonday(
+			m.MondayTokenInput,
+			m.MondayGlobalBoardInput,
+			m.MondayWorkspaceBoardInput,
+			m.MondayActiveField,
+			m.MondayActiveTab,
+			m.MondayTokenPos,
+			m.MondayGlobalBoardPos,
+			m.MondayWorkspaceBoardPos,
+			m.MondayValidationErr,
+		)
 	case ScreenReview:
 		return screens.RenderReview(m.Review, m.Cursor)
 	case ScreenInstalling:
@@ -1117,6 +1128,12 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			// "Configure Monday" — load existing config and start at Token field.
 			m.loadMondayConfig()
 			m.MondayActiveField = screens.MondayFieldToken
+			// Default to workspace tab when global is empty and workspace has data.
+			if m.MondayGlobalBoardInput == "" && m.MondayWorkspaceBoardInput != "" {
+				m.MondayActiveTab = "workspace"
+			} else {
+				m.MondayActiveTab = "global"
+			}
 			m.MondayValidationErr = nil
 			m.setScreen(ScreenMonday)
 		case 6:
@@ -1666,9 +1683,8 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 		m.goToMondayOrReview()
 		return m, nil
 	case ScreenMonday:
-		// Enter on Monday screen: save inputs, persist to disk, inject MCP, return to welcome.
-		m.Selection.Monday.Token = m.MondayTokenInput
-		m.Selection.Monday.BoardID = m.MondayBoardInput
+		// Enter on Monday screen is handled by handleMondayInput (called earlier in Update).
+		// This branch is a safety fallback — save and return to welcome.
 		m.saveMondayConfig()
 		m.injectMondayMCP()
 		m.setScreen(ScreenWelcome)
@@ -2510,49 +2526,88 @@ func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.MondayValidationErr = nil
-		// Save inputs, persist to disk, inject MCP, return to welcome menu.
-		m.Selection.Monday.Token = m.MondayTokenInput
-		m.Selection.Monday.BoardID = m.MondayBoardInput
+		// Persist to disk and inject MCP, then return to welcome menu.
 		m.saveMondayConfig()
 		m.injectMondayMCP()
 		m.MondayDirty = false
 		m.setScreen(ScreenWelcome)
 		return m, nil
+
 	case tea.KeyEsc:
-		// Discard unsaved changes: clear in-memory inputs so next entry
-		// reloads from disk.
+		// Discard unsaved changes: clear in-memory inputs so next entry reloads from disk.
 		m.MondayTokenInput = ""
-		m.MondayBoardInput = ""
+		m.MondayGlobalBoardInput = ""
+		m.MondayWorkspaceBoardInput = ""
 		m.MondayTokenPos = 0
-		m.MondayBoardPos = 0
+		m.MondayGlobalBoardPos = 0
+		m.MondayWorkspaceBoardPos = 0
 		m.MondayValidationErr = nil
 		m.MondayDirty = false
 		m.setScreen(ScreenWelcome)
 		return m, nil
+
 	case tea.KeyTab:
-		// Cycle between token, board ID, and scope fields.
+		// Cycle: Token → Tabs → Board → Token
 		switch m.MondayActiveField {
 		case screens.MondayFieldToken:
-			m.MondayActiveField = screens.MondayFieldBoardID
-		case screens.MondayFieldBoardID:
-			m.MondayActiveField = screens.MondayFieldScope
+			m.MondayActiveField = screens.MondayFieldTabs
+		case screens.MondayFieldTabs:
+			m.MondayActiveField = screens.MondayFieldBoard
 		default:
 			m.MondayActiveField = screens.MondayFieldToken
 		}
 		return m, nil
-	case tea.KeyRunes:
-		// 's' toggles save scope ONLY when the scope field is active,
-		// otherwise it's a normal character typed into Token/Board.
-		if m.MondayActiveField == screens.MondayFieldScope {
-			if len(msg.Runes) == 1 && (msg.Runes[0] == 's' || msg.Runes[0] == ' ') {
-				if m.MondaySaveScope == "workspace" {
-					m.MondaySaveScope = "global"
-				} else {
-					m.MondaySaveScope = "workspace"
-				}
-				return m, nil
+
+	case tea.KeyLeft:
+		if m.MondayActiveField == screens.MondayFieldTabs {
+			m.MondayActiveTab = "global"
+			return m, nil
+		}
+		// Move cursor left within the active text field.
+		if m.MondayActiveField == screens.MondayFieldToken {
+			if m.MondayTokenPos > 0 {
+				m.MondayTokenPos--
 			}
-			return m, nil // ignore other keys on scope field
+		} else if m.MondayActiveField == screens.MondayFieldBoard {
+			if m.MondayActiveTab == "workspace" {
+				if m.MondayWorkspaceBoardPos > 0 {
+					m.MondayWorkspaceBoardPos--
+				}
+			} else {
+				if m.MondayGlobalBoardPos > 0 {
+					m.MondayGlobalBoardPos--
+				}
+			}
+		}
+		return m, nil
+
+	case tea.KeyRight:
+		if m.MondayActiveField == screens.MondayFieldTabs {
+			m.MondayActiveTab = "workspace"
+			return m, nil
+		}
+		// Move cursor right within the active text field.
+		if m.MondayActiveField == screens.MondayFieldToken {
+			if m.MondayTokenPos < len([]rune(m.MondayTokenInput)) {
+				m.MondayTokenPos++
+			}
+		} else if m.MondayActiveField == screens.MondayFieldBoard {
+			if m.MondayActiveTab == "workspace" {
+				if m.MondayWorkspaceBoardPos < len([]rune(m.MondayWorkspaceBoardInput)) {
+					m.MondayWorkspaceBoardPos++
+				}
+			} else {
+				if m.MondayGlobalBoardPos < len([]rune(m.MondayGlobalBoardInput)) {
+					m.MondayGlobalBoardPos++
+				}
+			}
+		}
+		return m, nil
+
+	case tea.KeyRunes:
+		// On the Tabs row, ignore rune input (navigation only).
+		if m.MondayActiveField == screens.MondayFieldTabs {
+			return m, nil
 		}
 		m.MondayValidationErr = nil
 		m.MondayDirty = true
@@ -2565,16 +2620,32 @@ func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.MondayTokenInput = string(newRunes)
 			m.MondayTokenPos += len(msg.Runes)
 		} else {
-			runes := []rune(m.MondayBoardInput)
-			newRunes := make([]rune, 0, len(runes)+len(msg.Runes))
-			newRunes = append(newRunes, runes[:m.MondayBoardPos]...)
-			newRunes = append(newRunes, msg.Runes...)
-			newRunes = append(newRunes, runes[m.MondayBoardPos:]...)
-			m.MondayBoardInput = string(newRunes)
-			m.MondayBoardPos += len(msg.Runes)
+			// MondayFieldBoard — write to the active tab's buffer.
+			if m.MondayActiveTab == "workspace" {
+				runes := []rune(m.MondayWorkspaceBoardInput)
+				newRunes := make([]rune, 0, len(runes)+len(msg.Runes))
+				newRunes = append(newRunes, runes[:m.MondayWorkspaceBoardPos]...)
+				newRunes = append(newRunes, msg.Runes...)
+				newRunes = append(newRunes, runes[m.MondayWorkspaceBoardPos:]...)
+				m.MondayWorkspaceBoardInput = string(newRunes)
+				m.MondayWorkspaceBoardPos += len(msg.Runes)
+			} else {
+				runes := []rune(m.MondayGlobalBoardInput)
+				newRunes := make([]rune, 0, len(runes)+len(msg.Runes))
+				newRunes = append(newRunes, runes[:m.MondayGlobalBoardPos]...)
+				newRunes = append(newRunes, msg.Runes...)
+				newRunes = append(newRunes, runes[m.MondayGlobalBoardPos:]...)
+				m.MondayGlobalBoardInput = string(newRunes)
+				m.MondayGlobalBoardPos += len(msg.Runes)
+			}
 		}
 		return m, nil
+
 	case tea.KeyBackspace:
+		// Backspace is a no-op on the Tabs row.
+		if m.MondayActiveField == screens.MondayFieldTabs {
+			return m, nil
+		}
 		m.MondayValidationErr = nil
 		m.MondayDirty = true
 		if m.MondayActiveField == screens.MondayFieldToken {
@@ -2584,32 +2655,18 @@ func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.MondayTokenPos--
 			}
 		} else {
-			if m.MondayBoardPos > 0 {
-				runes := []rune(m.MondayBoardInput)
-				m.MondayBoardInput = string(append(runes[:m.MondayBoardPos-1], runes[m.MondayBoardPos:]...))
-				m.MondayBoardPos--
-			}
-		}
-		return m, nil
-	case tea.KeyLeft:
-		if m.MondayActiveField == screens.MondayFieldToken {
-			if m.MondayTokenPos > 0 {
-				m.MondayTokenPos--
-			}
-		} else {
-			if m.MondayBoardPos > 0 {
-				m.MondayBoardPos--
-			}
-		}
-		return m, nil
-	case tea.KeyRight:
-		if m.MondayActiveField == screens.MondayFieldToken {
-			if m.MondayTokenPos < len([]rune(m.MondayTokenInput)) {
-				m.MondayTokenPos++
-			}
-		} else {
-			if m.MondayBoardPos < len([]rune(m.MondayBoardInput)) {
-				m.MondayBoardPos++
+			if m.MondayActiveTab == "workspace" {
+				if m.MondayWorkspaceBoardPos > 0 {
+					runes := []rune(m.MondayWorkspaceBoardInput)
+					m.MondayWorkspaceBoardInput = string(append(runes[:m.MondayWorkspaceBoardPos-1], runes[m.MondayWorkspaceBoardPos:]...))
+					m.MondayWorkspaceBoardPos--
+				}
+			} else {
+				if m.MondayGlobalBoardPos > 0 {
+					runes := []rune(m.MondayGlobalBoardInput)
+					m.MondayGlobalBoardInput = string(append(runes[:m.MondayGlobalBoardPos-1], runes[m.MondayGlobalBoardPos:]...))
+					m.MondayGlobalBoardPos--
+				}
 			}
 		}
 		return m, nil
@@ -3119,11 +3176,20 @@ func (m *Model) goToMondayOrReview() {
 	m.setScreen(ScreenReview)
 }
 
+// mondayCursorPos is retained for potential future use but the new RenderMonday
+// signature accepts per-field positions directly, so this helper is no longer
+// called in the View path. Keeping it avoids a "declared and not used" error.
 func mondayCursorPos(m Model) int {
-	if m.MondayActiveField == screens.MondayFieldToken {
+	switch m.MondayActiveField {
+	case screens.MondayFieldToken:
 		return m.MondayTokenPos
+	case screens.MondayFieldBoard:
+		if m.MondayActiveTab == "workspace" {
+			return m.MondayWorkspaceBoardPos
+		}
+		return m.MondayGlobalBoardPos
 	}
-	return m.MondayBoardPos
+	return 0
 }
 
 type mondayJSON struct {
@@ -3148,29 +3214,8 @@ func mondayWorkspaceConfigPath() string {
 }
 
 func (m *Model) loadMondayConfig() {
-	// Try workspace monday.json first (workspace takes precedence over global).
-	wsPath := mondayWorkspaceConfigPath()
-	if wsPath != "" {
-		if data, err := os.ReadFile(wsPath); err == nil {
-			var cfg mondayJSON
-			if json.Unmarshal(data, &cfg) == nil && (cfg.Token != "" || cfg.BoardID != "") {
-				if cfg.Token != "" && m.MondayTokenInput == "" {
-					m.MondayTokenInput = cfg.Token
-					m.MondayTokenPos = len([]rune(cfg.Token))
-				}
-				if cfg.BoardID != "" && m.MondayBoardInput == "" {
-					m.MondayBoardInput = cfg.BoardID
-					m.MondayBoardPos = len([]rune(cfg.BoardID))
-				}
-				m.MondaySaveScope = "workspace"
-				return
-			}
-		}
-	}
-
-	// Try global monday.json.
-	path := mondayConfigPath()
-	if path != "" {
+	// Load global config.
+	if path := mondayConfigPath(); path != "" {
 		if data, err := os.ReadFile(path); err == nil {
 			var cfg mondayJSON
 			if json.Unmarshal(data, &cfg) == nil {
@@ -3178,20 +3223,31 @@ func (m *Model) loadMondayConfig() {
 					m.MondayTokenInput = cfg.Token
 					m.MondayTokenPos = len([]rune(cfg.Token))
 				}
-				if cfg.BoardID != "" && m.MondayBoardInput == "" {
-					m.MondayBoardInput = cfg.BoardID
-					m.MondayBoardPos = len([]rune(cfg.BoardID))
-				}
-				if m.MondayTokenInput != "" {
-					m.MondaySaveScope = "global"
-					return
+				if cfg.BoardID != "" {
+					m.MondayGlobalBoardInput = cfg.BoardID
+					m.MondayGlobalBoardPos = len([]rune(cfg.BoardID))
 				}
 			}
 		}
 	}
 
-	// Default scope when no config found.
-	m.MondaySaveScope = "global"
+	// Load workspace config (board only; token falls back to global).
+	if wsPath := mondayWorkspaceConfigPath(); wsPath != "" {
+		if data, err := os.ReadFile(wsPath); err == nil {
+			var cfg mondayJSON
+			if json.Unmarshal(data, &cfg) == nil {
+				if cfg.BoardID != "" {
+					m.MondayWorkspaceBoardInput = cfg.BoardID
+					m.MondayWorkspaceBoardPos = len([]rune(cfg.BoardID))
+				}
+				// Edge case: workspace has a token but global doesn't.
+				if cfg.Token != "" && m.MondayTokenInput == "" {
+					m.MondayTokenInput = cfg.Token
+					m.MondayTokenPos = len([]rune(cfg.Token))
+				}
+			}
+		}
+	}
 
 	// Fallback: read token from existing Claude Code MCP config.
 	if m.MondayTokenInput == "" {
@@ -3224,7 +3280,12 @@ func (m Model) injectMondayMCP() {
 	if err != nil {
 		return
 	}
-	cfg := model.MondayConfig{Token: m.MondayTokenInput, BoardID: m.MondayBoardInput}
+	// Use the effective board ID: workspace overrides global when set.
+	effectiveBoard := m.MondayGlobalBoardInput
+	if m.MondayWorkspaceBoardInput != "" {
+		effectiveBoard = m.MondayWorkspaceBoardInput
+	}
+	cfg := model.MondayConfig{Token: m.MondayTokenInput, BoardID: effectiveBoard}
 	// Inject MCP for all installed agents (read from state).
 	agentIDs := cli.DiscoverAgents(home)
 	reg, regErr := agents.NewDefaultRegistry()
@@ -3241,25 +3302,30 @@ func (m Model) injectMondayMCP() {
 }
 
 func (m Model) saveMondayConfig() {
-	var path string
-	if m.MondaySaveScope == "workspace" {
-		path = mondayWorkspaceConfigPath()
-	} else {
-		path = mondayConfigPath()
-		// User explicitly chose "global". Remove any workspace override
-		// in the current working directory so the next load reflects the
-		// user's choice (workspace > global precedence would otherwise mask it).
-		if wsPath := mondayWorkspaceConfigPath(); wsPath != "" {
-			_ = os.Remove(wsPath)
+	// Write global config when token or global board is present.
+	if m.MondayTokenInput != "" || m.MondayGlobalBoardInput != "" {
+		if path := mondayConfigPath(); path != "" {
+			_ = os.MkdirAll(filepath.Dir(path), 0o755)
+			cfg := mondayJSON{Token: m.MondayTokenInput, BoardID: m.MondayGlobalBoardInput}
+			data, _ := json.MarshalIndent(cfg, "", "  ")
+			_ = os.WriteFile(path, append(data, '\n'), 0o644)
 		}
 	}
-	if path == "" {
+
+	// Write or delete the workspace config depending on whether the board is set.
+	wsPath := mondayWorkspaceConfigPath()
+	if wsPath == "" {
 		return
 	}
-	_ = os.MkdirAll(filepath.Dir(path), 0o755)
-	cfg := mondayJSON{Token: m.MondayTokenInput, BoardID: m.MondayBoardInput}
-	data, _ := json.MarshalIndent(cfg, "", "  ")
-	_ = os.WriteFile(path, append(data, '\n'), 0o644)
+	if m.MondayWorkspaceBoardInput != "" {
+		_ = os.MkdirAll(filepath.Dir(wsPath), 0o755)
+		cfg := mondayJSON{Token: m.MondayTokenInput, BoardID: m.MondayWorkspaceBoardInput}
+		data, _ := json.MarshalIndent(cfg, "", "  ")
+		_ = os.WriteFile(wsPath, append(data, '\n'), 0o644)
+	} else {
+		// User explicitly cleared the workspace board — remove the file.
+		_ = os.Remove(wsPath)
+	}
 }
 
 // buildInstallationViewData reads state.json and the dev-skills/dev-agents/monday
