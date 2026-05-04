@@ -3,10 +3,12 @@ package tui
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -22,6 +24,7 @@ import (
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/devskills"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/monday"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/sdd"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/logger"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/opencode"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/pipeline"
@@ -105,8 +108,12 @@ type UpgradePhaseCompletedMsg struct {
 
 // PreviewReadyMsg is sent after git pull completes, carrying the computed sync
 // preview so the user can confirm before the actual sync runs.
+//
+// Note: this message intentionally does NOT carry an UpgradeReport. The pull
+// phase before sync is a plain `git pull`, not a tool upgrade — there are no
+// per-tool versions to populate. Err carries any non-fatal pull failures so
+// the UI can warn before showing the preview.
 type PreviewReadyMsg struct {
-	Report  upgrade.UpgradeReport
 	Err     error
 	Preview cli.SyncPreview
 	// WizardUpdated is true when informa-wizard had new commits after pull.
@@ -254,8 +261,6 @@ type Model struct {
 	DevAgentSearchMode bool
 	Err               error
 
-	// OverwriteWarnCursor is the cursor position on ScreenInstallOverwriteWarn.
-	OverwriteWarnCursor int
 	// OverwriteWarnState holds the last install state shown on the warning screen.
 	OverwriteWarnState state.InstallState
 
@@ -295,6 +300,10 @@ type Model struct {
 	// MondayActiveTab is "global" or "workspace" — selects which board input is shown.
 	MondayActiveTab     string
 	MondayValidationErr error
+	// MondayInjectErr captures failures that happen AFTER token validation
+	// passed — specifically MCP injection failures into agent configs. Kept
+	// separate so the screen can use the right prefix when rendering.
+	MondayInjectErr error
 	// MondayDirty is true while the user has unsaved edits in the Monday config.
 	// Reset on Save (Enter) or Discard (Esc).
 	MondayDirty bool
@@ -546,19 +555,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case UpgradePhaseCompletedMsg:
 		// Pull phase done; sync phase is about to start (OperationRunning stays true).
 		m.UpgradeErr = msg.Err
-		// Always set a report so State 3 (results screen) is reached after sync.
-		report := msg.Report
-		m.UpgradeReport = &report
+		// Only assign a report when there's something meaningful to show. A failed
+		// phase carries Err != nil with an empty Results slice; setting UpgradeReport
+		// to a non-nil pointer to an empty struct would mislead the results renderer
+		// (and breaks TestUpgradePhaseCompletedMsg_SetsErrAndKeepsRunning).
+		if len(msg.Report.Results) > 0 {
+			report := msg.Report
+			m.UpgradeReport = &report
+		}
 		m.WizardNeedsRestart = msg.WizardUpdated
 		m.UpdateResults = nil
 		m.UpdateCheckDone = false
 		return m, nil
 	case PreviewReadyMsg:
 		// Pull done + preview computed — pause for user confirmation before sync.
+		// No UpgradeReport is set here: the pull phase is just `git pull`, not a
+		// tool upgrade, so leaving m.UpgradeReport nil prevents the results
+		// renderer from showing an empty "Update Results" section after sync.
 		m.OperationRunning = false
 		m.UpgradeSyncPhase = 1 // preview phase
-		report := msg.Report
-		m.UpgradeReport = &report
 		m.UpgradeErr = msg.Err
 		m.WizardNeedsRestart = msg.WizardUpdated
 		m.SyncPreview = msg.Preview
@@ -730,7 +745,7 @@ func (m Model) View() string {
 	case ScreenDevAgentPicker:
 		return screens.RenderDevAgentPicker(m.DevAgents, m.DevAgentChecked, m.Cursor, m.DevAgentCloneErr, m.DevAgentFilter, m.DevAgentSearchMode)
 	case ScreenInstallOverwriteWarn:
-		return screens.RenderInstallOverwriteWarn(m.OverwriteWarnState, m.OverwriteWarnCursor)
+		return screens.RenderInstallOverwriteWarn(m.OverwriteWarnState, m.Cursor)
 	case ScreenMonday:
 		return screens.RenderMonday(
 			m.MondayTokenInput,
@@ -742,6 +757,7 @@ func (m Model) View() string {
 			m.MondayGlobalBoardPos,
 			m.MondayWorkspaceBoardPos,
 			m.MondayValidationErr,
+			m.MondayInjectErr,
 		)
 	case ScreenReview:
 		return screens.RenderReview(m.Review, m.Cursor)
@@ -1097,7 +1113,7 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			if home := homeDir(); home != "" {
 				if s, err := state.Read(home); err == nil && len(s.InstalledAgents) > 0 {
 					m.OverwriteWarnState = s
-					m.OverwriteWarnCursor = 0
+					m.Cursor = 0
 					m.setScreen(ScreenInstallOverwriteWarn)
 					break
 				}
@@ -1135,6 +1151,7 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 				m.MondayActiveTab = "global"
 			}
 			m.MondayValidationErr = nil
+			m.MondayInjectErr = nil
 			m.setScreen(ScreenMonday)
 		case 6:
 			// "Configure models"
@@ -1687,6 +1704,11 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 		// This branch is a safety fallback — save and return to welcome.
 		m.saveMondayConfig()
 		m.injectMondayMCP()
+		// If MCP injection failed, MondayInjectErr is set; stay on ScreenMonday so
+		// the error is visible (mirrors token-validation error handling).
+		if m.MondayInjectErr != nil {
+			return m, nil
+		}
 		m.setScreen(ScreenWelcome)
 		return m, nil
 	case ScreenHealth:
@@ -2013,6 +2035,7 @@ func (m Model) startSync(overrides *model.SyncOverrides) tea.Cmd {
 func (m Model) startUpgradeSync() tea.Cmd {
 	return func() tea.Msg {
 		wizardUpdated := false
+		var pullErrs []error
 
 		// Pull informa-wizard from the persisted source directory.
 		home := homeDir()
@@ -2029,6 +2052,9 @@ func (m Model) startUpgradeSync() tea.Cmd {
 					logMsg := fmt.Sprintf("pull: before=%s after=%s pullErr=%v updated=%v\n",
 						headBefore, headAfter, pullErr, headBefore != headAfter)
 					_ = os.WriteFile(logPath, []byte(logMsg), 0o644)
+					if pullErr != nil {
+						pullErrs = append(pullErrs, fmt.Errorf("informa-wizard pull: %w", pullErr))
+					}
 					if headBefore != "" && headAfter != "" && headBefore != headAfter {
 						wizardUpdated = true
 					}
@@ -2040,11 +2066,15 @@ func (m Model) startUpgradeSync() tea.Cmd {
 		if home != "" {
 			devSkillsDir := filepath.Join(home, ".informa-wizard", "dev-skills")
 			if _, err := os.Stat(devSkillsDir); err == nil {
-				_ = devskills.Pull(devSkillsDir)
+				if pullErr := devskills.Pull(devSkillsDir); pullErr != nil {
+					pullErrs = append(pullErrs, fmt.Errorf("dev-skills pull: %w", pullErr))
+				}
 			}
 			devAgentsDir := filepath.Join(home, ".informa-wizard", "dev-agents")
 			if _, err := os.Stat(devAgentsDir); err == nil {
-				_ = devagents.Pull(devAgentsDir)
+				if pullErr := devagents.Pull(devAgentsDir); pullErr != nil {
+					pullErrs = append(pullErrs, fmt.Errorf("dev-agents pull: %w", pullErr))
+				}
 			}
 		}
 
@@ -2056,7 +2086,11 @@ func (m Model) startUpgradeSync() tea.Cmd {
 			preview = cli.ComputeSyncPreview(home, selection)
 		}
 
-		return PreviewReadyMsg{WizardUpdated: wizardUpdated, Preview: preview}
+		var pullErr error
+		if len(pullErrs) > 0 {
+			pullErr = errors.Join(pullErrs...)
+		}
+		return PreviewReadyMsg{WizardUpdated: wizardUpdated, Preview: preview, Err: pullErr}
 	}
 }
 
@@ -2526,9 +2560,15 @@ func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.MondayValidationErr = nil
+		m.MondayInjectErr = nil
 		// Persist to disk and inject MCP, then return to welcome menu.
 		m.saveMondayConfig()
 		m.injectMondayMCP()
+		// If MCP injection failed, MondayInjectErr is set; stay on ScreenMonday so
+		// the error is visible (only ScreenMonday's renderer reads it).
+		if m.MondayInjectErr != nil {
+			return m, nil
+		}
 		m.MondayDirty = false
 		m.setScreen(ScreenWelcome)
 		return m, nil
@@ -2542,6 +2582,7 @@ func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.MondayGlobalBoardPos = 0
 		m.MondayWorkspaceBoardPos = 0
 		m.MondayValidationErr = nil
+		m.MondayInjectErr = nil
 		m.MondayDirty = false
 		m.setScreen(ScreenWelcome)
 		return m, nil
@@ -2610,6 +2651,7 @@ func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.MondayValidationErr = nil
+		m.MondayInjectErr = nil
 		m.MondayDirty = true
 		if m.MondayActiveField == screens.MondayFieldToken {
 			runes := []rune(m.MondayTokenInput)
@@ -2647,6 +2689,7 @@ func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.MondayValidationErr = nil
+		m.MondayInjectErr = nil
 		m.MondayDirty = true
 		if m.MondayActiveField == screens.MondayFieldToken {
 			if m.MondayTokenPos > 0 {
@@ -3272,12 +3315,13 @@ func (m *Model) loadMondayConfig() {
 	}
 }
 
-func (m Model) injectMondayMCP() {
+func (m *Model) injectMondayMCP() {
 	if m.MondayTokenInput == "" {
 		return
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
+		m.MondayInjectErr = fmt.Errorf("resolve user home dir: %w", err)
 		return
 	}
 	// Use the effective board ID: workspace overrides global when set.
@@ -3290,25 +3334,39 @@ func (m Model) injectMondayMCP() {
 	agentIDs := cli.DiscoverAgents(home)
 	reg, regErr := agents.NewDefaultRegistry()
 	if regErr != nil {
+		m.MondayInjectErr = fmt.Errorf("build agent registry: %w", regErr)
 		return
 	}
+	var injectErrs []error
 	for _, agentID := range agentIDs {
 		adapter, ok := reg.Get(agentID)
 		if !ok {
 			continue
 		}
-		_, _ = monday.Inject(home, adapter, cfg)
+		if _, err := monday.Inject(home, adapter, cfg); err != nil {
+			injectErrs = append(injectErrs, fmt.Errorf("%s: %w", agentID, err))
+		}
+	}
+	if len(injectErrs) > 0 {
+		m.MondayInjectErr = fmt.Errorf("monday MCP injection: %w", errors.Join(injectErrs...))
 	}
 }
 
 func (m Model) saveMondayConfig() {
 	// Write global config when token or global board is present.
+	// Mode 0o600: monday.json contains an API token — sensitive content.
 	if m.MondayTokenInput != "" || m.MondayGlobalBoardInput != "" {
 		if path := mondayConfigPath(); path != "" {
 			_ = os.MkdirAll(filepath.Dir(path), 0o755)
 			cfg := mondayJSON{Token: m.MondayTokenInput, BoardID: m.MondayGlobalBoardInput}
 			data, _ := json.MarshalIndent(cfg, "", "  ")
-			_ = os.WriteFile(path, append(data, '\n'), 0o644)
+			_ = os.WriteFile(path, append(data, '\n'), 0o600)
+			// os.WriteFile preserves the existing inode mode when the file already
+			// exists. Older versions wrote 0o644; force-tighten to 0o600 to ensure
+			// the API token is never readable by other users.
+			if err := os.Chmod(path, 0o600); err != nil && runtime.GOOS != "windows" {
+				logger.Warn("failed to tighten %s permissions: %v", path, err)
+			}
 		}
 	}
 
@@ -3321,7 +3379,11 @@ func (m Model) saveMondayConfig() {
 		_ = os.MkdirAll(filepath.Dir(wsPath), 0o755)
 		cfg := mondayJSON{Token: m.MondayTokenInput, BoardID: m.MondayWorkspaceBoardInput}
 		data, _ := json.MarshalIndent(cfg, "", "  ")
-		_ = os.WriteFile(wsPath, append(data, '\n'), 0o644)
+		_ = os.WriteFile(wsPath, append(data, '\n'), 0o600)
+		// Force the mode in case an older version created the file with 0o644.
+		if err := os.Chmod(wsPath, 0o600); err != nil && runtime.GOOS != "windows" {
+			logger.Warn("failed to tighten %s permissions: %v", wsPath, err)
+		}
 	} else {
 		// User explicitly cleared the workspace board — remove the file.
 		_ = os.Remove(wsPath)
@@ -3687,6 +3749,17 @@ func restartWizardCmd() tea.Cmd {
 			return SyncDoneMsg{Err: fmt.Errorf("cannot find wizard source dir: %w", err)}
 		}
 		repoDir := strings.TrimSpace(string(data))
+
+		// On Windows, `go install` cannot replace the running .exe — the file is
+		// locked while the wizard is still executing. Surface a manual instruction
+		// so the user can rebuild after closing the wizard themselves.
+		if runtime.GOOS == "windows" {
+			return SyncDoneMsg{Err: fmt.Errorf(
+				"on Windows the wizard binary cannot be self-replaced while running; "+
+					"close this wizard and run: go install ./cmd/informa-wizard (from %s)",
+				repoDir,
+			)}
+		}
 
 		// Rebuild the binary.
 		goInstall := exec.Command("go", "install", "./cmd/informa-wizard")

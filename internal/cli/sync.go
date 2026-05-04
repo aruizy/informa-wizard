@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -21,6 +22,7 @@ import (
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/sdd"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/skills"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/theme"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/logger"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/pipeline"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/state"
@@ -46,12 +48,19 @@ type SyncFlags struct {
 	rawProfilePhases []string
 }
 
+// PreviewFile is one entry in a ComponentPreview, identifying a destination
+// path and whether it would be newly created (true) or modified (false).
+type PreviewFile struct {
+	Path string
+	New  bool
+}
+
 // ComponentPreview holds the preview of files a single component would write.
 type ComponentPreview struct {
 	ID            string
-	Files         []string // destination paths that would be written/modified
-	NewFiles      int      // count of files that do not exist yet
-	ModifiedFiles int      // count of files that already exist
+	Files         []PreviewFile // destination paths and per-file new/modified flag
+	NewFiles      int           // count of files that do not exist yet
+	ModifiedFiles int           // count of files that already exist
 }
 
 // SyncPreview holds the preview of what a sync run would change.
@@ -90,21 +99,25 @@ func ComputeSyncPreview(homeDir string, selection model.Selection) SyncPreview {
 
 		newCount := 0
 		modCount := 0
+		files := make([]PreviewFile, 0, len(paths))
 		for _, p := range paths {
+			isNew := false
 			if _, err := os.Stat(p); err != nil {
 				newCount++ // file doesn't exist yet
+				isNew = true
 			} else {
 				modCount++ // file would be overwritten
 			}
+			files = append(files, PreviewFile{Path: p, New: isNew})
 		}
 
-		if len(paths) == 0 {
+		if len(files) == 0 {
 			continue
 		}
 
 		components = append(components, ComponentPreview{
 			ID:            string(component),
-			Files:         paths,
+			Files:         files,
 			NewFiles:      newCount,
 			ModifiedFiles: modCount,
 		})
@@ -336,7 +349,14 @@ func BuildSyncSelection(flags SyncFlags, agentIDs []model.AgentID, homeDir strin
 	}
 	preset := model.PresetFull
 	if len(skillIDs) == 0 {
-		if s, err := state.Read(homeDir); err == nil {
+		s, err := state.Read(homeDir)
+		if err != nil {
+			if errors.Is(err, state.ErrInvalidState) {
+				// Route through the logger; writing to stderr corrupts the TUI alt-screen.
+				logger.Warn("state.json is invalid (%v); falling back to default sync selection", err)
+			}
+			// Other errors (missing file, decode failure) are silent — caller treats as "no state".
+		} else {
 			for _, raw := range s.InstalledSkills {
 				skillIDs = append(skillIDs, model.SkillID(raw))
 			}
@@ -666,7 +686,8 @@ func (s componentSyncStep) Run() error {
 	case model.ComponentDevSkills:
 		cfg, err := devskills.ReadConfig(s.homeDir)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "WARNING: dev-skills config read failed: %v\n", err)
+			// Route through the logger; writing to stderr corrupts the TUI alt-screen.
+			logger.Warn("dev-skills config read failed: %v", err)
 		}
 		if cfg.RepoURL == "" || len(cfg.InstalledSkills) == 0 {
 			return nil
@@ -693,7 +714,8 @@ func (s componentSyncStep) Run() error {
 	case model.ComponentDevAgents:
 		agentCfg, err := devagents.ReadConfig(s.homeDir)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "WARNING: dev-agents config read failed: %v\n", err)
+			// Route through the logger; writing to stderr corrupts the TUI alt-screen.
+			logger.Warn("dev-agents config read failed: %v", err)
 		}
 		if agentCfg.RepoURL == "" || len(agentCfg.InstalledAgents) == 0 {
 			return nil
@@ -708,8 +730,17 @@ func (s componentSyncStep) Run() error {
 		if err := devagents.Pull(targetDir); err != nil {
 			return fmt.Errorf("pull dev-agents repo: %w", err)
 		}
+		// Resolve the default model for Claude Code agents — match install exactly
+		// (run.go:654-658). InstalledClaudePreset stores preset NAMES (balanced /
+		// performance / economy / custom), NOT model aliases, so reading it would
+		// produce invalid `model: balanced` frontmatter. Stick to the assignments
+		// map; default to "sonnet" otherwise.
+		agentModel := "sonnet"
+		if m, ok := s.selection.ClaudeModelAssignments["orchestrator"]; ok {
+			agentModel = string(m)
+		}
 		for _, adapter := range adapters {
-			res, err := devagents.InjectAgents(s.homeDir, adapter, agentCfg.InstalledAgents, "", s.selection.Agents...)
+			res, err := devagents.InjectAgents(s.homeDir, adapter, agentCfg.InstalledAgents, agentModel, s.selection.Agents...)
 			if err != nil {
 				return fmt.Errorf("inject dev-agents for %q: %w", adapter.Agent(), err)
 			}

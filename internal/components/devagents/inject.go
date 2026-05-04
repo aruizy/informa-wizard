@@ -288,6 +288,13 @@ func mergeJSONFile(path string, overlay []byte) (filemerge.WriteResult, error) {
 // agentFileSuffix returns the file suffix to use for the given agent type.
 // VS Code uses ".agent.md"; all others (Claude Code, Cursor, etc.) use ".md".
 func agentFileSuffix(agentID model.AgentID) string {
+	return AgentFileSuffix(agentID)
+}
+
+// AgentFileSuffix is the exported equivalent of agentFileSuffix so callers
+// outside this package (e.g. cli.componentPaths) can resolve the same suffix
+// without duplicating the per-agent rule.
+func AgentFileSuffix(agentID model.AgentID) string {
 	if agentID == model.AgentVSCodeCopilot {
 		return ".agent.md"
 	}

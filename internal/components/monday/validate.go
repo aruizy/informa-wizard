@@ -64,10 +64,15 @@ func ValidateToken(token string) error {
 	}
 	_ = json.Unmarshal(respBody, &result)
 
+	// 401 always means invalid token, even if Monday returns an empty errors array.
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("invalid token — Monday rejected it as not authenticated")
+	}
+
 	if len(result.Errors) > 0 {
 		msg := result.Errors[0].Message
 		code := result.Errors[0].Extensions.Code
-		if code == "NOT_AUTHENTICATED" || resp.StatusCode == http.StatusUnauthorized {
+		if code == "NOT_AUTHENTICATED" {
 			return fmt.Errorf("invalid token — Monday rejected it as not authenticated")
 		}
 		if msg != "" {

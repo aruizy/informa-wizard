@@ -102,6 +102,22 @@ func log(level slog.Level, format string, args ...any) {
 	mu.Unlock()
 
 	if l == nil {
+		// Fallback: when the logger has not been initialized (e.g. early
+		// failure resolving the home directory, or CLI flag-only paths that
+		// skip Init), surface messages on stderr rather than dropping them.
+		// Keep formatting minimal — a single line with a level prefix.
+		var prefix string
+		switch level {
+		case slog.LevelInfo:
+			prefix = "[INFO] "
+		case slog.LevelWarn:
+			prefix = "[WARN] "
+		case slog.LevelError:
+			prefix = "[ERROR] "
+		default:
+			prefix = "[LOG] "
+		}
+		fmt.Fprintf(os.Stderr, prefix+format+"\n", args...)
 		return
 	}
 

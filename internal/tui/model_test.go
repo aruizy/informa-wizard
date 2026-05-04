@@ -732,7 +732,7 @@ func TestPreviewReadyMsg_SetsPhaseAndPreview(t *testing.T) {
 
 	preview := cli.SyncPreview{
 		Components: []cli.ComponentPreview{
-			{ID: "sdd", Files: []string{"/home/user/.claude/agents/sdd-init.md"}, NewFiles: 0, ModifiedFiles: 1},
+			{ID: "sdd", Files: []cli.PreviewFile{{Path: "/home/user/.claude/agents/sdd-init.md", New: false}}, NewFiles: 0, ModifiedFiles: 1},
 		},
 	}
 	updated, _ := m.Update(PreviewReadyMsg{Preview: preview})
@@ -752,23 +752,20 @@ func TestPreviewReadyMsg_SetsPhaseAndPreview(t *testing.T) {
 	}
 }
 
-// TestPreviewReadyMsg_SetsUpgradeReport verifies that PreviewReadyMsg sets
-// UpgradeReport so the results screen can be shown after sync completes.
-func TestPreviewReadyMsg_SetsUpgradeReport(t *testing.T) {
+// TestPreviewReadyMsg_LeavesUpgradeReportNil verifies that PreviewReadyMsg
+// does NOT set UpgradeReport. The pull phase before sync is just `git pull`,
+// not a tool upgrade — leaving UpgradeReport nil prevents the renderer from
+// printing an empty "Update Results" section after the sync completes.
+func TestPreviewReadyMsg_LeavesUpgradeReportNil(t *testing.T) {
 	m := NewModel(system.DetectionResult{}, "dev")
 	m.Screen = ScreenUpgradeSync
 	m.OperationRunning = true
 
-	report := upgrade.UpgradeReport{
-		Results: []upgrade.ToolUpgradeResult{
-			{ToolName: "engram", Status: upgrade.UpgradeSucceeded},
-		},
-	}
-	updated, _ := m.Update(PreviewReadyMsg{Report: report})
+	updated, _ := m.Update(PreviewReadyMsg{})
 	state := updated.(Model)
 
-	if state.UpgradeReport == nil {
-		t.Fatal("expected UpgradeReport to be set after PreviewReadyMsg")
+	if state.UpgradeReport != nil {
+		t.Fatalf("expected UpgradeReport to remain nil after PreviewReadyMsg; got %+v", state.UpgradeReport)
 	}
 }
 

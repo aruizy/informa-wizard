@@ -2,12 +2,19 @@ package state
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 )
+
+// ErrInvalidState is returned by Read when state.json decodes successfully but
+// fails schema validation (e.g., unknown agent IDs, unknown components).
+// Callers can check via errors.Is(err, ErrInvalidState) to distinguish a
+// malformed state from os.IsNotExist.
+var ErrInvalidState = errors.New("invalid state file")
 
 const stateDir = ".informa-wizard"
 const stateFile = "state.json"
@@ -98,10 +105,9 @@ func (s InstallState) Validate() error {
 
 // Read reads and unmarshals the state file from the given home directory.
 // Returns an error if the file does not exist or cannot be decoded.
-// If the file decodes successfully but fails schema validation, a warning is
-// printed to stderr and a zero-value InstallState is returned (so callers fall
-// back to defaults), with no error — this avoids hard failures on minor schema
-// drift or corrupted state.
+// When the file decodes successfully but fails schema validation, Read returns
+// a zero-value InstallState wrapped with ErrInvalidState so callers can
+// distinguish malformed state from a missing file via errors.Is.
 func Read(homeDir string) (InstallState, error) {
 	data, err := os.ReadFile(Path(homeDir))
 	if err != nil {
@@ -112,8 +118,7 @@ func Read(homeDir string) (InstallState, error) {
 		return InstallState{}, err
 	}
 	if err := s.Validate(); err != nil {
-		fmt.Fprintf(os.Stderr, "WARNING: state.json validation failed: %v; treating as missing\n", err)
-		return InstallState{}, nil
+		return InstallState{}, fmt.Errorf("%w: %v", ErrInvalidState, err)
 	}
 	return s, nil
 }

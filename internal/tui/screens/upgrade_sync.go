@@ -36,9 +36,11 @@ func RenderUpgradeSync(results []update.UpdateResult, upgradeReport *upgrade.Upg
 		return b.String()
 	}
 
-	// State 2: preview ready — show diff preview and await user confirmation
+	// State 2: preview ready — show diff preview and await user confirmation.
+	// Pass upgradeErr so any pull failures are visible above the preview;
+	// otherwise the user couldn't tell that pulls failed before deciding to apply.
 	if phase == 1 {
-		b.WriteString(renderUpgradeSyncPreview(preview))
+		b.WriteString(renderUpgradeSyncPreview(preview, upgradeErr))
 		return b.String()
 	}
 
@@ -105,14 +107,28 @@ func renderUpgradeSyncConfirm() string {
 func renderUpgradeSyncResult(report *upgrade.UpgradeReport, syncFilesChanged int, upgradeErr error, syncErr error) string {
 	var b strings.Builder
 
-	// --- Update section ---
-	b.WriteString(styles.HeadingStyle.Render("Update Results"))
-	b.WriteString("\n\n")
+	// Show the "Update Results" section only when a real upgrade ran (report has
+	// per-tool results) or when the update phase produced an error worth showing.
+	// The Update+Sync flow's pull phase does not populate Results, so we skip
+	// the section in that case to avoid printing an empty "Update Results" box.
+	hasUpgradeResults := report != nil && len(report.Results) > 0
+	if hasUpgradeResults || upgradeErr != nil {
+		if hasUpgradeResults {
+			b.WriteString(styles.HeadingStyle.Render("Update Results"))
+		} else {
+			b.WriteString(styles.HeadingStyle.Render("Pull Results"))
+		}
+		b.WriteString("\n\n")
+	}
 
 	if upgradeErr != nil {
-		b.WriteString(styles.ErrorStyle.Render("✗ Update failed: " + upgradeErr.Error()))
+		label := "✗ Update failed: "
+		if !hasUpgradeResults {
+			label = "✗ Pull failed: "
+		}
+		b.WriteString(styles.ErrorStyle.Render(label + upgradeErr.Error()))
 		b.WriteString("\n")
-	} else if report != nil {
+	} else if hasUpgradeResults {
 		upgradeSucceeded, upgradeFailed, upgradeSkipped := 0, 0, 0
 
 		for _, r := range report.Results {
@@ -164,7 +180,9 @@ func renderUpgradeSyncResult(report *upgrade.UpgradeReport, syncFilesChanged int
 		}
 	}
 
-	b.WriteString("\n")
+	if hasUpgradeResults || upgradeErr != nil {
+		b.WriteString("\n")
+	}
 
 	// --- Sync section ---
 	b.WriteString(styles.HeadingStyle.Render("Sync Results"))
@@ -187,8 +205,24 @@ func renderUpgradeSyncResult(report *upgrade.UpgradeReport, syncFilesChanged int
 // renderUpgradeSyncPreview renders the diff preview between pull and sync.
 // It shows the components that will run and the files they would touch,
 // truncating to previewMaxFilesPerComponent per component.
-func renderUpgradeSyncPreview(preview cli.SyncPreview) string {
+//
+// If upgradeErr is non-nil, a warning banner is rendered at the top so the
+// user can decide whether to proceed even though one or more pulls failed.
+func renderUpgradeSyncPreview(preview cli.SyncPreview, upgradeErr error) string {
 	var b strings.Builder
+
+	if upgradeErr != nil {
+		// errors.Join renders multi-line; keep continuation lines indented so
+		// the warning banner stays visually coherent.
+		b.WriteString(styles.WarningStyle.Render("⚠ Some pulls failed:"))
+		b.WriteString("\n")
+		for _, line := range strings.Split(upgradeErr.Error(), "\n") {
+			b.WriteString(styles.WarningStyle.Render("    " + line))
+			b.WriteString("\n")
+		}
+		b.WriteString(styles.SubtextStyle.Render("  Sync will run against the local copy as-is."))
+		b.WriteString("\n\n")
+	}
 
 	b.WriteString(styles.HeadingStyle.Render("Sync Preview"))
 	b.WriteString("\n\n")
@@ -240,21 +274,17 @@ func renderUpgradeSyncPreview(preview cli.SyncPreview) string {
 			shown = previewMaxFilesPerComponent
 		}
 		for i := 0; i < shown; i++ {
-			marker := styles.WarningStyle.Render("~")
-			if i < len(comp.Files) {
-				// Determine new vs modified per file.
-				// We computed counts already; use the order: first NewFiles entries
-				// are "new" if comp.NewFiles > 0. But we don't have per-file new/mod
-				// flags stored. Instead just show as "~" for modified and "+" for new
-				// by re-checking existence isn't needed — we already categorized them.
-				// For display, show all as ~ (modified) since we don't track order.
-				// Use a simple heuristic: show the label based on counts position.
-				marker = styles.SubtextStyle.Render("~")
+			file := comp.Files[i]
+			var marker string
+			if file.New {
+				marker = styles.SuccessStyle.Render("+")
+			} else {
+				marker = styles.WarningStyle.Render("~")
 			}
 			b.WriteString("    ")
 			b.WriteString(marker)
 			b.WriteString(" ")
-			b.WriteString(styles.SubtextStyle.Render(comp.Files[i]))
+			b.WriteString(styles.SubtextStyle.Render(file.Path))
 			b.WriteString("\n")
 		}
 		if total > previewMaxFilesPerComponent {

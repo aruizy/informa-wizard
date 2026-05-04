@@ -2,9 +2,11 @@ package devskills
 
 import (
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/filemerge"
@@ -39,13 +41,12 @@ func InjectSkills(homeDir string, adapter agents.Adapter, skillIDs []string) (In
 
 	for _, skillID := range skillIDs {
 		sourceDir := filepath.Join(repoDir, "skills", skillID)
-		entries, err := os.ReadDir(sourceDir)
-		if err != nil {
+		if _, err := os.Stat(sourceDir); err != nil {
 			if os.IsNotExist(err) {
 				log.Printf("devskills: skipping %q — directory not found in repo", skillID)
 				continue
 			}
-			return InjectionResult{}, fmt.Errorf("skill %s: read dir failed: %w", skillID, err)
+			return InjectionResult{}, fmt.Errorf("skill %s: stat dir failed: %w", skillID, err)
 		}
 
 		destDir := filepath.Join(adapter.SkillsDir(homeDir), skillID)
@@ -53,23 +54,38 @@ func InjectSkills(homeDir string, adapter agents.Adapter, skillIDs []string) (In
 			return InjectionResult{}, fmt.Errorf("skill %s: create dir failed: %w", skillID, err)
 		}
 
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
+		walkErr := filepath.WalkDir(sourceDir, func(path string, d fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
 			}
-			content, readErr := os.ReadFile(filepath.Join(sourceDir, entry.Name()))
+			if d.IsDir() {
+				if path != sourceDir && strings.HasPrefix(d.Name(), ".") {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if d.Name() == ".DS_Store" || d.Name() == "Thumbs.db" {
+				return nil
+			}
+			content, readErr := os.ReadFile(path)
 			if readErr != nil {
-				return InjectionResult{}, fmt.Errorf("skill %s/%s: read failed: %w", skillID, entry.Name(), readErr)
+				return fmt.Errorf("skill %s: read %s failed: %w", skillID, path, readErr)
 			}
-
-			destPath := filepath.Join(destDir, entry.Name())
+			relPath, relErr := filepath.Rel(sourceDir, path)
+			if relErr != nil {
+				return fmt.Errorf("skill %s: resolve relative path %s failed: %w", skillID, path, relErr)
+			}
+			destPath := filepath.Join(destDir, relPath)
 			result, writeErr := filemerge.WriteFileAtomic(destPath, content, 0o644)
 			if writeErr != nil {
-				return InjectionResult{}, fmt.Errorf("skill %s/%s: write failed: %w", skillID, entry.Name(), writeErr)
+				return fmt.Errorf("skill %s/%s: write failed: %w", skillID, relPath, writeErr)
 			}
-
 			changed = changed || result.Changed
 			files = append(files, destPath)
+			return nil
+		})
+		if walkErr != nil {
+			return InjectionResult{}, walkErr
 		}
 	}
 

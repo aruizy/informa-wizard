@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"os/exec"
@@ -21,6 +22,7 @@ import (
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/sdd"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/skills"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/theme"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/logger"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/pipeline"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/planner"
@@ -117,10 +119,12 @@ func RunInstall(args []string, detection system.DetectionResult) (InstallResult,
 		return result, err
 	}
 
-	// Print dependency warnings before the pipeline starts (CLI only).
-	// The TUI surfaces these on the complete screen instead.
+	// Print dependency warnings before the pipeline starts.
+	// Route through the logger; writing to stderr corrupts the TUI alt-screen.
+	// (TUI surfaces these on the complete screen, but the install path is
+	// shared between TUI and CLI — the logger fallback handles CLI-only cases.)
 	if !detection.Dependencies.AllPresent {
-		fmt.Fprintf(os.Stderr, "WARNING: missing dependencies: %s\n\n%s\n",
+		logger.Warn("missing dependencies: %s\n\n%s",
 			strings.Join(detection.Dependencies.MissingRequired, ", "),
 			system.FormatMissingDepsMessage(detection.Dependencies))
 	}
@@ -510,7 +514,8 @@ func (s componentApplyStep) Run() error {
 				binDir := filepath.Dir(binaryPath)
 				if err := system.AddToUserPath(binDir); err != nil {
 					// Non-fatal: warn but continue — the binary was downloaded successfully.
-					fmt.Fprintf(os.Stderr, "WARNING: could not add %s to PATH: %v\n", binDir, err)
+					// Route through the logger; writing to stderr corrupts the TUI alt-screen.
+					logger.Warn("could not add %s to PATH: %v", binDir, err)
 				}
 			}
 		}
@@ -523,6 +528,8 @@ func (s componentApplyStep) Run() error {
 					if setupStrict {
 						return fmt.Errorf("engram setup for %q: %w", adapter.Agent(), err)
 					}
+					// Route through the logger; writing to stderr corrupts the TUI alt-screen.
+					logger.Warn("engram setup for %q failed: %v", adapter.Agent(), err)
 				}
 			}
 			if _, err := engram.Inject(s.homeDir, adapter); err != nil {
@@ -577,7 +584,8 @@ func (s componentApplyStep) Run() error {
 		return nil
 	case model.ComponentMonday:
 		if s.selection.Monday.Token == "" {
-			fmt.Fprintf(os.Stderr, "WARNING: monday component selected but no --monday-token provided — skipping MCP injection\n")
+			// Route through the logger; writing to stderr corrupts the TUI alt-screen.
+			logger.Warn("monday component selected but no --monday-token provided — skipping MCP injection")
 			return nil
 		}
 		for _, adapter := range adapters {
@@ -589,7 +597,8 @@ func (s componentApplyStep) Run() error {
 	case model.ComponentDevSkills:
 		cfg, err := devskills.ReadConfig(s.homeDir)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "WARNING: dev-skills config read failed: %v\n", err)
+			// Route through the logger; writing to stderr corrupts the TUI alt-screen.
+			logger.Warn("dev-skills config read failed: %v", err)
 		}
 		repoURL := s.devSkillsRepo
 		if repoURL == "" {
@@ -625,7 +634,8 @@ func (s componentApplyStep) Run() error {
 	case model.ComponentDevAgents:
 		agentCfg, err := devagents.ReadConfig(s.homeDir)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "WARNING: dev-agents config read failed: %v\n", err)
+			// Route through the logger; writing to stderr corrupts the TUI alt-screen.
+			logger.Warn("dev-agents config read failed: %v", err)
 		}
 		repoURL := agentCfg.RepoURL
 		if repoURL == "" {
@@ -943,7 +953,17 @@ func componentPaths(homeDir string, selection model.Selection, adapters []agents
 				}
 			}
 		case model.ComponentSkills:
+			skillDir := adapter.SkillsDir(homeDir)
 			for _, skillID := range selectedSkillIDs(selection) {
+				if skillDir != "" {
+					skillRoot := filepath.Join(skillDir, string(skillID))
+					nested := walkSkillFiles(skillRoot)
+					if len(nested) > 0 {
+						paths = append(paths, nested...)
+						continue
+					}
+				}
+				// Fallback: directory not yet on disk (pre-install) — return canonical SKILL.md path.
 				path := skills.SkillPathForAgent(homeDir, adapter, skillID)
 				if path != "" {
 					paths = append(paths, path)
@@ -993,7 +1013,8 @@ func componentPaths(homeDir string, selection model.Selection, adapters []agents
 					cfg, cfgErr := devskills.ReadConfig(homeDir)
 					if cfgErr == nil {
 						for _, skillID := range cfg.InstalledSkills {
-							paths = append(paths, filepath.Join(skillsDir, skillID, "SKILL.md"))
+							skillRoot := filepath.Join(skillsDir, skillID)
+							paths = append(paths, walkSkillFiles(skillRoot)...)
 						}
 					}
 				}
@@ -1007,10 +1028,7 @@ func componentPaths(homeDir string, selection model.Selection, adapters []agents
 				if agentsDir != "" {
 					agentCfg, cfgErr := devagents.ReadConfig(homeDir)
 					if cfgErr == nil {
-						suffix := ".md"
-						if adapter.Agent() == model.AgentVSCodeCopilot {
-							suffix = ".agent.md"
-						}
+						suffix := devagents.AgentFileSuffix(adapter.Agent())
 						for _, agentID := range agentCfg.InstalledAgents {
 							paths = append(paths, filepath.Join(agentsDir, agentID+suffix))
 						}
@@ -1168,4 +1186,45 @@ func (s noopStep) ID() string {
 
 func (s noopStep) Run() error {
 	return nil
+}
+
+// walkSkillFiles returns every regular file under root (recursive). If root does
+// not exist or cannot be walked, it returns an empty slice. This is used by
+// componentPaths so sync previews and uninstall correctly account for nested
+// files inside skill directories (e.g., "skill-creator/agents/...").
+func walkSkillFiles(root string) []string {
+	if root == "" {
+		return nil
+	}
+	if _, err := os.Stat(root); err != nil {
+		return nil
+	}
+	var out []string
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			// Skip unreadable subtrees rather than aborting the whole walk.
+			if d != nil && d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.IsDir() {
+			// Skip hidden directories like .git/, .vscode/, etc. — they aren't
+			// part of any skill's installable footprint. The root itself is
+			// allowed even if it begins with '.' (callers may root the walk
+			// inside a hidden home subdirectory).
+			if strings.HasPrefix(d.Name(), ".") && path != root {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		// Skip common OS metadata files that should never be tracked as
+		// skill content (macOS Finder, Windows Explorer thumbnails).
+		if d.Name() == ".DS_Store" || d.Name() == "Thumbs.db" {
+			return nil
+		}
+		out = append(out, path)
+		return nil
+	})
+	return out
 }

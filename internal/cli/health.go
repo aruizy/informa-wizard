@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -192,10 +193,17 @@ func checkStateFile(homeDir string) (Check, *state.InstallState) {
 				Message: "not found — run installation first",
 			}, nil
 		}
+		if errors.Is(err, state.ErrInvalidState) {
+			return Check{
+				Name:    "state.json",
+				Status:  CheckFail,
+				Message: "malformed: " + err.Error(),
+			}, nil
+		}
 		return Check{
 			Name:    "state.json",
 			Status:  CheckFail,
-			Message: "malformed: " + err.Error(),
+			Message: "read failed: " + err.Error(),
 		}, nil
 	}
 	return Check{
@@ -257,6 +265,15 @@ func checkMondayToken(homeDir string) Check {
 	}
 
 	if err := monday.ValidateToken(mc.Token); err != nil {
+		// Network failures during validation should not block the doctor — keep
+		// it fast and offline-friendly. Surface as a Warn instead of Fail.
+		if monday.IsNetworkError(err) {
+			return Check{
+				Name:    "monday token",
+				Status:  CheckWarn,
+				Message: "Token validation skipped — network unavailable",
+			}
+		}
 		return Check{Name: "monday token", Status: CheckFail, Message: err.Error()}
 	}
 

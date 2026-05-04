@@ -2,6 +2,7 @@ package skills
 
 import (
 	"fmt"
+	"io/fs"
 	"log"
 	"path/filepath"
 	"strings"
@@ -58,37 +59,48 @@ func Inject(homeDir string, adapter agents.Adapter, skillIDs []model.SkillID) (I
 		}
 
 		assetDir := "skills/" + string(id)
-		entries, readDirErr := assets.FS.ReadDir(assetDir)
-		if readDirErr != nil {
-			log.Printf("skills: skipping %q — embedded directory not found: %v", id, readDirErr)
+		if _, statErr := fs.Stat(assets.FS, assetDir); statErr != nil {
+			log.Printf("skills: skipping %q — embedded directory not found: %v", id, statErr)
 			skipped = append(skipped, id)
 			continue
 		}
 
 		destDir := filepath.Join(skillDir, string(id))
 
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
+		walkErr := fs.WalkDir(assets.FS, assetDir, func(assetPath string, d fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if d.IsDir() {
+				return nil
 			}
 
-			assetPath := assetDir + "/" + entry.Name()
-			data, readErr := assets.FS.ReadFile(assetPath)
+			data, readErr := fs.ReadFile(assets.FS, assetPath)
 			if readErr != nil {
-				return InjectionResult{}, fmt.Errorf("skill %q: read file %q failed: %w", id, entry.Name(), readErr)
+				return fmt.Errorf("skill %q: read file %q failed: %w", id, assetPath, readErr)
 			}
-			if len(data) == 0 && entry.Name() == "SKILL.md" {
-				return InjectionResult{}, fmt.Errorf("skill %q: SKILL.md exists but is empty — build may be corrupt", id)
+			if len(data) == 0 && d.Name() == "SKILL.md" {
+				return fmt.Errorf("skill %q: SKILL.md exists but is empty — build may be corrupt", id)
 			}
 
-			path := filepath.Join(destDir, entry.Name())
+			// Compute path relative to assetDir so subdirectory structure is preserved.
+			relPath, relErr := filepath.Rel(assetDir, filepath.FromSlash(assetPath))
+			if relErr != nil {
+				return fmt.Errorf("skill %q: resolve relative path %q failed: %w", id, assetPath, relErr)
+			}
+
+			path := filepath.Join(destDir, relPath)
 			writeResult, writeErr := filemerge.WriteFileAtomic(path, data, 0o644)
 			if writeErr != nil {
-				return InjectionResult{}, fmt.Errorf("skill %q: write %q failed: %w", id, entry.Name(), writeErr)
+				return fmt.Errorf("skill %q: write %q failed: %w", id, relPath, writeErr)
 			}
 
 			changed = changed || writeResult.Changed
 			paths = append(paths, path)
+			return nil
+		})
+		if walkErr != nil {
+			return InjectionResult{}, walkErr
 		}
 	}
 

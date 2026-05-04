@@ -82,8 +82,9 @@ func RunArgs(args []string, stdout io.Writer) error {
 	if homeDirErr == nil && !isReadOnly {
 		lk, lockErr := lockAcquireFn(homeDir)
 		if lockErr != nil {
-			_, _ = fmt.Fprintf(stdout, "Error: %s\n", lockErr)
-			return fmt.Errorf("%w", lockErr)
+			// main() prints returned errors to stderr — let it surface this one
+			// rather than printing here AND returning a wrapped error.
+			return lockErr
 		}
 		defer func() { _ = lk.Release() }()
 	}

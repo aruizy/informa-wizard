@@ -20,7 +20,10 @@ const (
 //   - a tab row to switch between global and workspace config
 //   - a board ID input for the active tab
 //   - status indicators per scope
-//   - an optional validation error
+//   - an optional validation error (token rejected by the API)
+//   - an optional MCP injection error (token OK but writing into agent
+//     configs failed). These are rendered with distinct prefixes so the
+//     user can tell which step failed.
 func RenderMonday(
 	token string,
 	globalBoard string,
@@ -31,6 +34,7 @@ func RenderMonday(
 	globalBoardPos int,
 	workspaceBoardPos int,
 	validationErr error,
+	injectErr error,
 ) string {
 	var b strings.Builder
 
@@ -111,6 +115,9 @@ func RenderMonday(
 	// ── Validation / warning ──────────────────────────────────────────────
 	if validationErr != nil {
 		b.WriteString(styles.WarningStyle.Render("Token validation failed: " + validationErr.Error()))
+		b.WriteString("\n\n")
+	} else if injectErr != nil {
+		b.WriteString(styles.WarningStyle.Render("MCP injection failed: " + injectErr.Error()))
 		b.WriteString("\n\n")
 	} else if token == "" {
 		b.WriteString(styles.WarningStyle.Render("Token is required for Monday integration."))

@@ -25,6 +25,7 @@ var (
 func Clone(repoURL, targetDir string) error {
 	return gitops.RunWithRetry(func() error {
 		cmd := execCommand("git", "clone", repoURL, targetDir)
+		gitops.ForceEnglish(cmd)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			if isGitNotFound(err) {
@@ -42,6 +43,7 @@ func Clone(repoURL, targetDir string) error {
 func Pull(targetDir string) error {
 	return gitops.RunWithRetry(func() error {
 		cmd := execCommand("git", "-C", targetDir, "pull")
+		gitops.ForceEnglish(cmd)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			if isGitNotFound(err) {

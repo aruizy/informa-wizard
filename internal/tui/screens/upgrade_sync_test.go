@@ -190,14 +190,19 @@ func TestRenderUpgradeSync_PreviewState_WithComponents(t *testing.T) {
 	preview := cli.SyncPreview{
 		Components: []cli.ComponentPreview{
 			{
-				ID:            "sdd",
-				Files:         []string{"/home/user/.claude/skills/sdd-init/SKILL.md", "/home/user/.claude/agents/sdd-init.md"},
+				ID: "sdd",
+				Files: []cli.PreviewFile{
+					{Path: "/home/user/.claude/skills/sdd-init/SKILL.md", New: true},
+					{Path: "/home/user/.claude/agents/sdd-init.md", New: false},
+				},
 				NewFiles:      1,
 				ModifiedFiles: 1,
 			},
 			{
-				ID:            "skills",
-				Files:         []string{"/home/user/.claude/skills/commitpush/SKILL.md"},
+				ID: "skills",
+				Files: []cli.PreviewFile{
+					{Path: "/home/user/.claude/skills/commitpush/SKILL.md", New: false},
+				},
 				NewFiles:      0,
 				ModifiedFiles: 1,
 			},
@@ -231,9 +236,9 @@ func TestRenderUpgradeSync_PreviewState_WithComponents(t *testing.T) {
 // TestRenderUpgradeSync_PreviewState_Truncation verifies that large file lists
 // are truncated to previewMaxFilesPerComponent + "... and N more".
 func TestRenderUpgradeSync_PreviewState_Truncation(t *testing.T) {
-	files := make([]string, 10)
+	files := make([]cli.PreviewFile, 10)
 	for i := range files {
-		files[i] = fmt.Sprintf("/home/user/.claude/skills/sdd-%d/SKILL.md", i)
+		files[i] = cli.PreviewFile{Path: fmt.Sprintf("/home/user/.claude/skills/sdd-%d/SKILL.md", i), New: false}
 	}
 	preview := cli.SyncPreview{
 		Components: []cli.ComponentPreview{

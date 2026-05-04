@@ -36,7 +36,7 @@ func Acquire(homeDir string) (*Lock, error) {
 
 	for {
 		// Attempt to create the lock file exclusively.
-		f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if err == nil {
 			// Write PID + process name so a reused PID by another binary
 			// doesn't trigger a false "already locked" error.
@@ -77,8 +77,26 @@ func Acquire(homeDir string) (*Lock, error) {
 			lockedExe = strings.TrimSpace(lines[1])
 		}
 
-		// If process is running but it's not informa-wizard, the PID was reused.
-		if isProcessRunning(pid) && (lockedExe == "" || isWizardProcess(pid, lockedExe)) {
+		// Legacy lock files (written before exe-name was recorded) only have a PID.
+		// We can't verify by exe name, but if the PID is still alive we must NOT
+		// reclaim — that PID may belong to a still-running legacy wizard, and
+		// stealing its lock would let two wizards run concurrently during the
+		// version transition. Only reclaim if the PID is dead.
+		if lockedExe == "" {
+			if isProcessRunning(pid) {
+				return nil, fmt.Errorf(
+					"another informa-wizard instance may be running (PID %d, legacy lock without exe name). "+
+						"Wait for it to finish or remove %s if you're sure no instance is running.",
+					pid, path,
+				)
+			}
+			fmt.Fprintf(os.Stderr, "Warning: legacy lock file at %s (no exe name); reclaiming\n", path)
+			_ = os.Remove(path)
+			continue
+		}
+
+		// If process is running and it matches the wizard binary, refuse to claim.
+		if isProcessRunning(pid) && isWizardProcess(pid, lockedExe) {
 			return nil, fmt.Errorf(
 				"another informa-wizard instance is running (PID %d). "+
 					"Wait for it to finish or remove %s if you're sure no instance is running.",
