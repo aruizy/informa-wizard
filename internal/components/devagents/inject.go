@@ -9,11 +9,29 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/agents"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/filemerge"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 )
+
+// vscodeVersionFn is the production function used to detect VS Code's version.
+// It's a var (not const) so tests can swap in a counter/mock and call
+// resetVSCodeVersionCache() to re-arm sync.OnceValue. Production code never
+// reassigns this.
+var vscodeVersionFn = vscodeVersion
+
+// cachedVSCodeVersion memoises vscodeVersionFn for the lifetime of the process
+// so we don't shell out to `code --version` on every ExpectedAgentFiles call
+// (sync preview, post-apply verify, post-sync verify, uninstall).
+var cachedVSCodeVersion = sync.OnceValue(func() string { return vscodeVersionFn() })
+
+// resetVSCodeVersionCache re-arms the OnceValue so a test can observe the
+// underlying call count after swapping vscodeVersionFn. Test-only helper.
+func resetVSCodeVersionCache() {
+	cachedVSCodeVersion = sync.OnceValue(func() string { return vscodeVersionFn() })
+}
 
 // InjectionResult reports the outcome of an InjectAgents call.
 type InjectionResult struct {
@@ -58,7 +76,7 @@ func InjectAgents(homeDir string, adapter agents.Adapter, agentIDs []string, def
 	// VS Code >= 1.116.0 reads agents from ~/.claude/agents/ when Claude Code
 	// is also installed — skip duplicate injection.
 	if adapter.Agent() == model.AgentVSCodeCopilot && hasAgent(installedAgentIDs, model.AgentClaudeCode) {
-		if vsVer := vscodeVersion(); vsVer != "" && versionAtLeast(vsVer, "1.116.0") {
+		if vsVer := cachedVSCodeVersion(); vsVer != "" && versionAtLeast(vsVer, "1.116.0") {
 			log.Printf("devagents: skipping VS Code injection — v%s reads from ~/.claude/agents/", vsVer)
 			return InjectionResult{}, nil
 		}
@@ -193,6 +211,54 @@ func copyAgentSubSkills(sourceSkillsDir string, adapter agents.Adapter, homeDir 
 	return files, changed, nil
 }
 
+// expectedAgentSubSkillFiles enumerates the destination paths that
+// copyAgentSubSkills will (or did) write for the given source skills dir.
+// Mirrors copyAgentSubSkills' walk: only subdirectories at depth 1 are
+// considered, and only regular files inside each are emitted (no recursion
+// beyond depth 1, matching the copy logic).
+//
+// Read errors are logged (matching the rest of the package's "best-effort but
+// observable" pattern) and the affected entry is skipped. Returns nil silently
+// when the parent skills dir doesn't exist (the agent has no sub-skills, which
+// is normal — copyAgentSubSkills also returns silently in this case).
+func expectedAgentSubSkillFiles(sourceSkillsDir string, skillsDestRoot string) []string {
+	entries, err := os.ReadDir(sourceSkillsDir)
+	if err != nil {
+		// IsNotExist is the "no skills/" case — silent, like copyAgentSubSkills.
+		// Other read errors (perm, I/O) are surfaced as a warning so the drift
+		// is observable; we still skip and let the verifier proceed.
+		if !os.IsNotExist(err) {
+			log.Printf("devagents: ExpectedAgentFiles read %q failed: %v", sourceSkillsDir, err)
+		}
+		return nil
+	}
+
+	var files []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		subID := entry.Name()
+		sourceSubDir := filepath.Join(sourceSkillsDir, subID)
+		destSubDir := filepath.Join(skillsDestRoot, subID)
+
+		subEntries, err := os.ReadDir(sourceSubDir)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				log.Printf("devagents: ExpectedAgentFiles read %q failed: %v", sourceSubDir, err)
+			}
+			continue
+		}
+		for _, subEntry := range subEntries {
+			if subEntry.IsDir() {
+				continue
+			}
+			files = append(files, filepath.Join(destSubDir, subEntry.Name()))
+		}
+	}
+	return files
+}
+
 // injectOpenCodeAgents merges agent definitions into opencode.json's "agent" key.
 func injectOpenCodeAgents(homeDir string, adapter agents.Adapter, agentIDs []string) (InjectionResult, error) {
 	repoDir := filepath.Join(homeDir, ".informa-wizard", "dev-agents")
@@ -289,6 +355,65 @@ func mergeJSONFile(path string, overlay []byte) (filemerge.WriteResult, error) {
 // VS Code uses ".agent.md"; all others (Claude Code, Cursor, etc.) use ".md".
 func agentFileSuffix(agentID model.AgentID) string {
 	return AgentFileSuffix(agentID)
+}
+
+// ExpectedAgentFiles returns the absolute paths InjectAgents will (or did)
+// write for the given adapter and agent IDs. Verifier and uninstall callers
+// use this so they stay in lock-step with the inject logic — same skip rules,
+// same destination directory, same suffix, same source-file gating.
+//
+// Returns nil when the adapter is excluded from per-file injection:
+//   - OpenCode (uses JSON config, not per-agent files)
+//   - VS Code Copilot when Claude Code is also installed and VS Code is >=
+//     1.116.0 (it reads agents from ~/.claude/agents/ directly)
+//   - Adapters that do not implement subAgentInjector or report
+//     SupportsSubAgents() == false
+//
+// Agents whose source dir lacks a usable top-level .md file are dropped — this
+// matches inject's findMainMD-skip behaviour and prevents the verifier from
+// expecting files that the inject step never wrote.
+func ExpectedAgentFiles(homeDir string, adapter agents.Adapter, agentIDs []string, installedAgentIDs ...model.AgentID) []string {
+	if adapter.Agent() == model.AgentOpenCode {
+		return nil
+	}
+	if adapter.Agent() == model.AgentVSCodeCopilot && hasAgent(installedAgentIDs, model.AgentClaudeCode) {
+		if vsVer := cachedVSCodeVersion(); vsVer != "" && versionAtLeast(vsVer, "1.116.0") {
+			return nil
+		}
+	}
+	sai, ok := adapter.(subAgentInjector)
+	if !ok || !sai.SupportsSubAgents() {
+		return nil
+	}
+
+	repoDir := filepath.Join(homeDir, ".informa-wizard", "dev-agents")
+	destDir := sai.SubAgentsDir(homeDir)
+	if adapter.Agent() == model.AgentVSCodeCopilot {
+		destDir = filepath.Join(destDir, "prompts")
+	}
+	suffix := AgentFileSuffix(adapter.Agent())
+
+	// Adapters that support skills also receive sub-skill files from each
+	// agent's skills/ subtree (see copyAgentSubSkills). The verifier and
+	// uninstall logic must include those, otherwise drift creeps back in.
+	includeSubSkills := adapter.SupportsSkills()
+	skillsDestRoot := ""
+	if includeSubSkills {
+		skillsDestRoot = adapter.SkillsDir(homeDir)
+	}
+
+	paths := make([]string, 0, len(agentIDs))
+	for _, agentID := range agentIDs {
+		agentDir := filepath.Join(repoDir, agentID)
+		if _, _, ok := findMainMD(agentDir); !ok {
+			continue
+		}
+		paths = append(paths, filepath.Join(destDir, agentID+suffix))
+		if includeSubSkills {
+			paths = append(paths, expectedAgentSubSkillFiles(filepath.Join(agentDir, "skills"), skillsDestRoot)...)
+		}
+	}
+	return paths
 }
 
 // AgentFileSuffix is the exported equivalent of agentFileSuffix so callers

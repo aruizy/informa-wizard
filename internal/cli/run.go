@@ -1020,20 +1020,13 @@ func componentPaths(homeDir string, selection model.Selection, adapters []agents
 				}
 			}
 		case model.ComponentDevAgents:
-			if sai, ok := adapter.(interface {
-				SupportsSubAgents() bool
-				SubAgentsDir(homeDir string) string
-			}); ok && sai.SupportsSubAgents() {
-				agentsDir := sai.SubAgentsDir(homeDir)
-				if agentsDir != "" {
-					agentCfg, cfgErr := devagents.ReadConfig(homeDir)
-					if cfgErr == nil {
-						suffix := devagents.AgentFileSuffix(adapter.Agent())
-						for _, agentID := range agentCfg.InstalledAgents {
-							paths = append(paths, filepath.Join(agentsDir, agentID+suffix))
-						}
-					}
-				}
+			// Mirror InjectAgents skip + destDir + findMainMD logic by delegating
+			// to devagents.ExpectedAgentFiles. The previous inline computation
+			// drifted out of sync with InjectAgents (missing the prompts/ subdir
+			// for VS Code, the VS Code 1.116+ skip, and the findMainMD gate),
+			// causing the verifier to flag files inject never wrote.
+			if agentCfg, cfgErr := devagents.ReadConfig(homeDir); cfgErr == nil {
+				paths = append(paths, devagents.ExpectedAgentFiles(homeDir, adapter, agentCfg.InstalledAgents, selection.Agents...)...)
 			}
 		}
 	}
