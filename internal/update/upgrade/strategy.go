@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/engram"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/gitops"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/system"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/update"
 )
@@ -277,6 +278,7 @@ func ggaScriptUpgradeForOS(ctx context.Context, r update.UpdateResult, osName st
 	// Clone the full repository — install.sh needs the entire repo context.
 	repoURL := fmt.Sprintf("https://github.com/%s/%s.git", r.Tool.Owner, r.Tool.Repo)
 	cloneCmd := execCommand("git", "clone", repoURL, tmpDir)
+	gitops.ForceEnglish(cloneCmd)
 	cloneCmd.Stdin = nil
 	if out, err := cloneCmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git clone %s: %w (output: %s)", r.Tool.Repo, err, strings.TrimSpace(string(out)))

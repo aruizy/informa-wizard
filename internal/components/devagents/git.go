@@ -4,37 +4,54 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/gitops"
 )
 
 // execCommand is the package-level command factory, injectable for tests.
 var execCommand = exec.Command
 
+// retryAttempts and retryBaseDelay control retry behaviour and are package-level
+// variables so tests can override them to avoid multi-second delays.
+var (
+	retryAttempts  = gitops.RetryAttempts
+	retryBaseDelay = gitops.RetryBaseDelay
+)
+
 // Clone clones repoURL into targetDir using git.
-// Returns an error if git is not found or the clone fails.
+// Retries up to 3 times with exponential backoff for transient network failures.
+// Returns an error if git is not found or all clone attempts fail.
 func Clone(repoURL, targetDir string) error {
-	cmd := execCommand("git", "clone", repoURL, targetDir)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		if isGitNotFound(err) {
-			return fmt.Errorf("git is required for dev-agents; install git and try again")
+	return gitops.RunWithRetry(func() error {
+		cmd := execCommand("git", "clone", repoURL, targetDir)
+		gitops.ForceEnglish(cmd)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			if isGitNotFound(err) {
+				return fmt.Errorf("git is required for dev-agents; install git and try again")
+			}
+			return fmt.Errorf("git clone failed: %s", string(out))
 		}
-		return fmt.Errorf("git clone failed: %s", string(out))
-	}
-	return nil
+		return nil
+	}, isGitNotFound, retryAttempts, retryBaseDelay)
 }
 
 // Pull updates the repository in targetDir by running git pull.
-// Returns an error if git is not found or the pull fails.
+// Retries up to 3 times with exponential backoff for transient network failures.
+// Returns an error if git is not found or all pull attempts fail.
 func Pull(targetDir string) error {
-	cmd := execCommand("git", "-C", targetDir, "pull")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		if isGitNotFound(err) {
-			return fmt.Errorf("git is required for dev-agents; install git and try again")
+	return gitops.RunWithRetry(func() error {
+		cmd := execCommand("git", "-C", targetDir, "pull")
+		gitops.ForceEnglish(cmd)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			if isGitNotFound(err) {
+				return fmt.Errorf("git is required for dev-agents; install git and try again")
+			}
+			return fmt.Errorf("git pull failed: %s", string(out))
 		}
-		return fmt.Errorf("git pull failed: %s", string(out))
-	}
-	return nil
+		return nil
+	}, isGitNotFound, retryAttempts, retryBaseDelay)
 }
 
 // isGitNotFound reports whether err indicates the git binary was not found.

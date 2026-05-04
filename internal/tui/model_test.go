@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/backup"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/cli"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/pipeline"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/planner"
@@ -23,8 +24,11 @@ func TestNavigationWelcomeToDetection(t *testing.T) {
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	state := updated.(Model)
 
-	if state.Screen != ScreenDetection {
-		t.Fatalf("screen = %v, want %v", state.Screen, ScreenDetection)
+	// When no prior install exists: goes to ScreenDetection.
+	// When a prior install exists on this machine: goes to ScreenInstallOverwriteWarn.
+	// Both are valid outcomes — the test verifies forward navigation happens.
+	if state.Screen != ScreenDetection && state.Screen != ScreenInstallOverwriteWarn {
+		t.Fatalf("screen = %v, want ScreenDetection or ScreenInstallOverwriteWarn", state.Screen)
 	}
 }
 
@@ -716,9 +720,114 @@ func TestUpgradePhaseCompletedClearsUpdateResults(t *testing.T) {
 	}
 }
 
-// ─── T16: Welcome screen 7-item menu navigation ────────────────────────────
+// ─── PreviewReadyMsg (diff preview between pull and sync) ──────────────────
 
-// TestWelcomeMenu_InstallNavigation verifies cursor 0 (Install) goes to ScreenDetection.
+// TestPreviewReadyMsg_SetsPhaseAndPreview verifies that receiving PreviewReadyMsg
+// transitions to phase 1, clears OperationRunning, and stores the preview.
+func TestPreviewReadyMsg_SetsPhaseAndPreview(t *testing.T) {
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenUpgradeSync
+	m.OperationRunning = true
+	m.UpgradeSyncPhase = 0
+
+	preview := cli.SyncPreview{
+		Components: []cli.ComponentPreview{
+			{ID: "sdd", Files: []cli.PreviewFile{{Path: "/home/user/.claude/agents/sdd-init.md", New: false}}, NewFiles: 0, ModifiedFiles: 1},
+		},
+	}
+	updated, _ := m.Update(PreviewReadyMsg{Preview: preview})
+	state := updated.(Model)
+
+	if state.OperationRunning {
+		t.Fatal("expected OperationRunning=false after PreviewReadyMsg")
+	}
+	if state.UpgradeSyncPhase != 1 {
+		t.Fatalf("expected UpgradeSyncPhase=1 after PreviewReadyMsg, got %d", state.UpgradeSyncPhase)
+	}
+	if len(state.SyncPreview.Components) != 1 {
+		t.Fatalf("expected 1 preview component, got %d", len(state.SyncPreview.Components))
+	}
+	if state.SyncPreview.Components[0].ID != "sdd" {
+		t.Fatalf("expected preview component ID 'sdd', got %q", state.SyncPreview.Components[0].ID)
+	}
+}
+
+// TestPreviewReadyMsg_LeavesUpgradeReportNil verifies that PreviewReadyMsg
+// does NOT set UpgradeReport. The pull phase before sync is just `git pull`,
+// not a tool upgrade — leaving UpgradeReport nil prevents the renderer from
+// printing an empty "Update Results" section after the sync completes.
+func TestPreviewReadyMsg_LeavesUpgradeReportNil(t *testing.T) {
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenUpgradeSync
+	m.OperationRunning = true
+
+	updated, _ := m.Update(PreviewReadyMsg{})
+	state := updated.(Model)
+
+	if state.UpgradeReport != nil {
+		t.Fatalf("expected UpgradeReport to remain nil after PreviewReadyMsg; got %+v", state.UpgradeReport)
+	}
+}
+
+// TestUpgradeSyncPreviewConfirmation verifies that pressing Enter during phase=1
+// transitions to phase=2 and launches the sync operation.
+func TestUpgradeSyncPreviewConfirmation(t *testing.T) {
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenUpgradeSync
+	m.UpgradeSyncPhase = 1
+	m.OperationRunning = false
+	report := upgrade.UpgradeReport{}
+	m.UpgradeReport = &report
+	syncCalled := false
+	m.SyncFn = func(overrides *model.SyncOverrides) (int, error) {
+		syncCalled = true
+		return 5, nil
+	}
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	state := updated.(Model)
+
+	if state.UpgradeSyncPhase != 2 {
+		t.Fatalf("expected UpgradeSyncPhase=2 after Enter on preview, got %d", state.UpgradeSyncPhase)
+	}
+	if !state.OperationRunning {
+		t.Fatal("expected OperationRunning=true after confirming preview")
+	}
+	if cmd == nil {
+		t.Fatal("expected a cmd to be returned after confirming preview")
+	}
+	_ = syncCalled // sync runs async via cmd
+}
+
+// TestUpgradeSyncPreviewCancellation verifies that pressing Esc during phase=1
+// resets all operation state and returns to ScreenWelcome.
+func TestUpgradeSyncPreviewCancellation(t *testing.T) {
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenUpgradeSync
+	m.UpgradeSyncPhase = 1
+	m.OperationRunning = false
+	report := upgrade.UpgradeReport{}
+	m.UpgradeReport = &report
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	state := updated.(Model)
+
+	if state.Screen != ScreenWelcome {
+		t.Fatalf("expected ScreenWelcome after Esc on preview, got %v", state.Screen)
+	}
+	if state.UpgradeSyncPhase != 0 {
+		t.Fatalf("expected UpgradeSyncPhase reset to 0 after cancel, got %d", state.UpgradeSyncPhase)
+	}
+	if state.UpgradeReport != nil {
+		t.Fatal("expected UpgradeReport=nil after cancel")
+	}
+}
+
+// ─── T16: Welcome screen menu navigation ───────────────────────────────────
+
+// TestWelcomeMenu_InstallNavigation verifies cursor 0 (Install) leads forward in the flow.
+// When no prior install exists: goes to ScreenDetection.
+// When a prior install exists on this machine: goes to ScreenInstallOverwriteWarn.
 func TestWelcomeMenu_InstallNavigation(t *testing.T) {
 	m := NewModel(system.DetectionResult{}, "dev")
 	m.Screen = ScreenWelcome
@@ -727,14 +836,13 @@ func TestWelcomeMenu_InstallNavigation(t *testing.T) {
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	state := updated.(Model)
 
-	if state.Screen != ScreenDetection {
-		t.Fatalf("cursor=0 (Install): screen = %v, want %v", state.Screen, ScreenDetection)
+	if state.Screen != ScreenDetection && state.Screen != ScreenInstallOverwriteWarn {
+		t.Fatalf("cursor=0 (Install): screen = %v, want ScreenDetection or ScreenInstallOverwriteWarn", state.Screen)
 	}
 }
 
-// TestWelcomeMenu_UpgradeNavigation verifies cursor 1 (Upgrade tools) goes to ScreenUpgrade.
-// TestWelcomeMenu_SyncNavigation verifies cursor 1 (Sync configs) goes to ScreenSync.
-func TestWelcomeMenu_SyncNavigation(t *testing.T) {
+// TestWelcomeMenu_UpdateSyncNavigation verifies cursor 1 (Update+Sync) goes to ScreenUpgradeSync.
+func TestWelcomeMenu_UpdateSyncNavigation(t *testing.T) {
 	m := NewModel(system.DetectionResult{}, "dev")
 	m.Screen = ScreenWelcome
 	m.Cursor = 1
@@ -742,13 +850,13 @@ func TestWelcomeMenu_SyncNavigation(t *testing.T) {
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	state := updated.(Model)
 
-	if state.Screen != ScreenSync {
-		t.Fatalf("cursor=1 (Sync): screen = %v, want %v", state.Screen, ScreenSync)
+	if state.Screen != ScreenUpgradeSync {
+		t.Fatalf("cursor=1 (Update+Sync): screen = %v, want %v", state.Screen, ScreenUpgradeSync)
 	}
 }
 
-// TestWelcomeMenu_UpgradeSyncNavigation verifies cursor 2 (Update+Sync) goes to ScreenUpgradeSync.
-func TestWelcomeMenu_UpgradeSyncNavigation(t *testing.T) {
+// TestWelcomeMenu_ViewInstallationNavigation verifies cursor 2 (View installation) goes to ScreenInstallationView.
+func TestWelcomeMenu_ViewInstallationNavigation(t *testing.T) {
 	m := NewModel(system.DetectionResult{}, "dev")
 	m.Screen = ScreenWelcome
 	m.Cursor = 2
@@ -756,13 +864,13 @@ func TestWelcomeMenu_UpgradeSyncNavigation(t *testing.T) {
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	state := updated.(Model)
 
-	if state.Screen != ScreenUpgradeSync {
-		t.Fatalf("cursor=2 (Update+Sync): screen = %v, want %v", state.Screen, ScreenUpgradeSync)
+	if state.Screen != ScreenInstallationView {
+		t.Fatalf("cursor=2 (View installation): screen = %v, want %v", state.Screen, ScreenInstallationView)
 	}
 }
 
-// TestWelcomeMenu_ConfigureMondayNavigation verifies cursor 3 goes to ScreenMonday.
-func TestWelcomeMenu_ConfigureMondayNavigation(t *testing.T) {
+// TestWelcomeMenu_UninstallNavigation verifies cursor 3 (Uninstall component) goes to ScreenUninstall.
+func TestWelcomeMenu_UninstallNavigation(t *testing.T) {
 	m := NewModel(system.DetectionResult{}, "dev")
 	m.Screen = ScreenWelcome
 	m.Cursor = 3
@@ -770,13 +878,13 @@ func TestWelcomeMenu_ConfigureMondayNavigation(t *testing.T) {
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	state := updated.(Model)
 
-	if state.Screen != ScreenMonday {
-		t.Fatalf("cursor=3 (Configure Monday): screen = %v, want %v", state.Screen, ScreenMonday)
+	if state.Screen != ScreenUninstall {
+		t.Fatalf("cursor=3 (Uninstall component): screen = %v, want %v", state.Screen, ScreenUninstall)
 	}
 }
 
-// TestWelcomeMenu_ConfigureModelsNavigation verifies cursor 4 goes to ScreenModelConfig.
-func TestWelcomeMenu_ConfigureModelsNavigation(t *testing.T) {
+// TestWelcomeMenu_HealthCheckNavigation verifies cursor 4 (Health check) goes to ScreenHealth.
+func TestWelcomeMenu_HealthCheckNavigation(t *testing.T) {
 	m := NewModel(system.DetectionResult{}, "dev")
 	m.Screen = ScreenWelcome
 	m.Cursor = 4
@@ -784,14 +892,27 @@ func TestWelcomeMenu_ConfigureModelsNavigation(t *testing.T) {
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	state := updated.(Model)
 
-	if state.Screen != ScreenModelConfig {
-		t.Fatalf("cursor=4 (Configure Models): screen = %v, want %v", state.Screen, ScreenModelConfig)
+	if state.Screen != ScreenHealth {
+		t.Fatalf("cursor=4 (Health check): screen = %v, want %v", state.Screen, ScreenHealth)
 	}
 }
 
-// TestWelcomeMenu_BackupsNavigation verifies cursor 6 (Manage backups) goes to ScreenBackups
-// when OpenCode is not detected.
-func TestWelcomeMenu_BackupsNavigation(t *testing.T) {
+// TestWelcomeMenu_ConfigureMondayNavigation verifies cursor 5 goes to ScreenMonday.
+func TestWelcomeMenu_ConfigureMondayNavigation(t *testing.T) {
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenWelcome
+	m.Cursor = 5
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	state := updated.(Model)
+
+	if state.Screen != ScreenMonday {
+		t.Fatalf("cursor=5 (Configure Monday): screen = %v, want %v", state.Screen, ScreenMonday)
+	}
+}
+
+// TestWelcomeMenu_ConfigureModelsNavigation verifies cursor 6 goes to ScreenModelConfig.
+func TestWelcomeMenu_ConfigureModelsNavigation(t *testing.T) {
 	m := NewModel(system.DetectionResult{}, "dev")
 	m.Screen = ScreenWelcome
 	m.Cursor = 6
@@ -799,23 +920,38 @@ func TestWelcomeMenu_BackupsNavigation(t *testing.T) {
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	state := updated.(Model)
 
-	if state.Screen != ScreenBackups {
-		t.Fatalf("cursor=6 (Backups): screen = %v, want %v", state.Screen, ScreenBackups)
+	if state.Screen != ScreenModelConfig {
+		t.Fatalf("cursor=6 (Configure Models): screen = %v, want %v", state.Screen, ScreenModelConfig)
 	}
 }
 
-// TestWelcomeMenu_OptionCount verifies the welcome menu has 8 items without OpenCode
-// and 9 items when OpenCode is detected (adds "OpenCode SDD Profiles" option).
-func TestWelcomeMenu_OptionCount(t *testing.T) {
-	// Without OpenCode detected: 8 options (includes "Configure Monday").
-	opts := screens.WelcomeOptions(false, 0, true)
-	if len(opts) != 8 {
-		t.Fatalf("WelcomeOptions(showProfiles=false) len = %d, want 8; got %v", len(opts), opts)
+// TestWelcomeMenu_BackupsNavigation verifies cursor 9 (Manage backups) goes to ScreenBackups
+// when OpenCode is not detected (no profiles option inserted).
+func TestWelcomeMenu_BackupsNavigation(t *testing.T) {
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenWelcome
+	m.Cursor = 9
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	state := updated.(Model)
+
+	if state.Screen != ScreenBackups {
+		t.Fatalf("cursor=9 (Backups): screen = %v, want %v", state.Screen, ScreenBackups)
 	}
-	// With OpenCode detected: 9 options (adds "OpenCode SDD Profiles").
+}
+
+// TestWelcomeMenu_OptionCount verifies the welcome menu has 11 items without OpenCode
+// and 12 items when OpenCode is detected (adds "OpenCode SDD Profiles" option).
+func TestWelcomeMenu_OptionCount(t *testing.T) {
+	// Without OpenCode detected: 11 options.
+	opts := screens.WelcomeOptions(false, 0, true)
+	if len(opts) != 11 {
+		t.Fatalf("WelcomeOptions(showProfiles=false) len = %d, want 11; got %v", len(opts), opts)
+	}
+	// With OpenCode detected: 12 options (adds "OpenCode SDD Profiles").
 	optsWithProfiles := screens.WelcomeOptions(true, 0, true)
-	if len(optsWithProfiles) != 9 {
-		t.Fatalf("WelcomeOptions(showProfiles=true) len = %d, want 9; got %v", len(optsWithProfiles), optsWithProfiles)
+	if len(optsWithProfiles) != 12 {
+		t.Fatalf("WelcomeOptions(showProfiles=true) len = %d, want 12; got %v", len(optsWithProfiles), optsWithProfiles)
 	}
 }
 
@@ -2707,16 +2843,64 @@ func TestPinErrClearedOnScreenReentry(t *testing.T) {
 		t.Fatalf("Esc from ScreenBackups: screen = %v, want ScreenWelcome", afterEsc.Screen)
 	}
 
-	// Navigate back to ScreenBackups (cursor 6 on Welcome → enter, no OpenCode detected).
-	afterEsc.Cursor = 6
+	// Navigate back to ScreenBackups (cursor 9 on Welcome → enter, no OpenCode detected).
+	afterEsc.Cursor = 9
 	updated2, _ := afterEsc.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	afterReturn := updated2.(Model)
 	if afterReturn.Screen != ScreenBackups {
-		t.Fatalf("Enter cursor=6 from ScreenWelcome: screen = %v, want ScreenBackups", afterReturn.Screen)
+		t.Fatalf("Enter cursor=9 from ScreenWelcome: screen = %v, want ScreenBackups", afterReturn.Screen)
 	}
 
 	// PinErr must be cleared on re-entry.
 	if afterReturn.PinErr != nil {
 		t.Fatalf("PinErr should be nil after returning to ScreenBackups, got: %v", afterReturn.PinErr)
+	}
+}
+
+// ─── Switch Claude preset shortcut ─────────────────────────────────────────
+
+// TestWelcomeMenu_SwitchClaudePresetShortcut verifies that pressing Enter on
+// the "Switch Claude preset" welcome menu item (cursor 7) jumps directly to
+// ScreenClaudeModelPicker with both ModelConfigMode and QuickClaudePresetMode
+// set to true so the back path returns to ScreenWelcome (not ScreenModelConfig).
+func TestWelcomeMenu_SwitchClaudePresetShortcut(t *testing.T) {
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenWelcome
+	m.Cursor = 7
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	state := updated.(Model)
+
+	if state.Screen != ScreenClaudeModelPicker {
+		t.Fatalf("cursor=7 (Switch Claude preset): screen = %v, want %v", state.Screen, ScreenClaudeModelPicker)
+	}
+	if !state.ModelConfigMode {
+		t.Errorf("ModelConfigMode = false, want true")
+	}
+	if !state.QuickClaudePresetMode {
+		t.Errorf("QuickClaudePresetMode = false, want true")
+	}
+}
+
+// TestQuickClaudePresetMode_GoBackReturnsToWelcome verifies that the goBack
+// path (Esc key) from ScreenClaudeModelPicker with QuickClaudePresetMode set
+// returns to ScreenWelcome and clears both flags.
+func TestQuickClaudePresetMode_GoBackReturnsToWelcome(t *testing.T) {
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenClaudeModelPicker
+	m.ModelConfigMode = true
+	m.QuickClaudePresetMode = true
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	state := updated.(Model)
+
+	if state.Screen != ScreenWelcome {
+		t.Fatalf("goBack from QuickClaudePresetMode: screen = %v, want %v", state.Screen, ScreenWelcome)
+	}
+	if state.ModelConfigMode {
+		t.Errorf("ModelConfigMode = true after goBack, want false")
+	}
+	if state.QuickClaudePresetMode {
+		t.Errorf("QuickClaudePresetMode = true after goBack, want false")
 	}
 }

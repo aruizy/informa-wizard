@@ -157,7 +157,7 @@ Respuestas válidas para continuar:
 
 - "sí"
 - "aprobado"
-- "dale"
+- "vale"
 - "go ahead"
 - cualquier confirmación explícita equivalente
 

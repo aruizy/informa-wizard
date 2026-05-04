@@ -17,7 +17,7 @@ Hoy, OpenCode permite tener UN solo `sdd-orchestrator` con UN solo set de modelo
 - **Balance** (Opus orquestador + Sonnet sub-agentes → el default actual)
 - **Economía** (Sonnet/Haiku everywhere → rápido y barato pero menos potente)
 
-El problema: **no podés cambiar entre estas configuraciones sin editar manualmente el `opencode.json`** cada vez que querés pasar de un modo a otro. Y en la práctica, un developer necesita diferentes perfiles para diferentes momentos:
+El problema: **no puedes cambiar entre estas configuraciones sin editar manualmente el `opencode.json`** cada vez que quieres pasar de un modo a otro. Y en la práctica, un developer necesita diferentes perfiles para diferentes momentos:
 
 - **"Voy a hacer algo heavy"** → orquestador Opus, sub-agentes Sonnet
 - **"Es algo simple, no quiero quemar tokens"** → todo Haiku

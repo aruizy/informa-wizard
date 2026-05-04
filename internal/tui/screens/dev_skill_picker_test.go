@@ -32,7 +32,7 @@ func TestRenderDevSkillPicker_AllSkillsShown(t *testing.T) {
 	)
 	checked := []bool{false, false, false}
 
-	output := screens.RenderDevSkillPicker(skills, checked, 0)
+	output := screens.RenderDevSkillPicker(skills, checked, 0, "", "", false)
 
 	for _, name := range []string{"Alpha Skill", "Beta Skill", "Gamma Skill"} {
 		if !strings.Contains(output, name) {
@@ -51,7 +51,7 @@ func TestRenderDevSkillPicker_NonePreSelected(t *testing.T) {
 	)
 	checked := []bool{false, false}
 
-	output := screens.RenderDevSkillPicker(skills, checked, 0)
+	output := screens.RenderDevSkillPicker(skills, checked, 0, "", "", false)
 
 	if strings.Contains(output, "[x]") {
 		t.Errorf("output contains [x] but all skills are unchecked; output: %q", output)
@@ -68,7 +68,7 @@ func TestRenderDevSkillPicker_SelectedSkillMarked(t *testing.T) {
 	)
 	checked := []bool{true, false}
 
-	output := screens.RenderDevSkillPicker(skills, checked, 0)
+	output := screens.RenderDevSkillPicker(skills, checked, 0, "", "", false)
 
 	if !strings.Contains(output, "[x]") {
 		t.Errorf("output does not contain [x] but checked[0]=true; output: %q", output)
@@ -85,11 +85,51 @@ func TestRenderDevSkillPicker_DescriptionsShown(t *testing.T) {
 	)
 	checked := []bool{false, false}
 
-	output := screens.RenderDevSkillPicker(skills, checked, 0)
+	output := screens.RenderDevSkillPicker(skills, checked, 0, "", "", false)
 
 	for _, desc := range []string{"Handles alpha patterns", "Handles beta patterns"} {
 		if !strings.Contains(output, desc) {
 			t.Errorf("output missing description %q", desc)
 		}
+	}
+}
+
+// TestRenderDevSkillPicker_FilterHidesNonMatching verifies that skills not
+// matching the filter are absent from the output.
+func TestRenderDevSkillPicker_FilterHidesNonMatching(t *testing.T) {
+	skills := makeSkills(
+		[]string{"alpha", "beta", "gamma"},
+		[]string{"Alpha Skill", "Beta Skill", "Gamma Skill"},
+		[]string{"", "", ""},
+	)
+	checked := []bool{false, false, false}
+
+	output := screens.RenderDevSkillPicker(skills, checked, 0, "", "alpha", false)
+
+	if !strings.Contains(output, "Alpha Skill") {
+		t.Errorf("output missing matching skill")
+	}
+	if strings.Contains(output, "Beta Skill") {
+		t.Errorf("output contains non-matching skill Beta Skill")
+	}
+	if strings.Contains(output, "Gamma Skill") {
+		t.Errorf("output contains non-matching skill Gamma Skill")
+	}
+}
+
+// TestRenderDevSkillPicker_SearchModeShowsPrompt verifies that the search prompt
+// is rendered when searchMode is true.
+func TestRenderDevSkillPicker_SearchModeShowsPrompt(t *testing.T) {
+	skills := makeSkills(
+		[]string{"alpha"},
+		[]string{"Alpha Skill"},
+		[]string{""},
+	)
+	checked := []bool{false}
+
+	output := screens.RenderDevSkillPicker(skills, checked, 0, "", "alp", true)
+
+	if !strings.Contains(output, "Search:") {
+		t.Errorf("output missing Search: prompt in search mode")
 	}
 }

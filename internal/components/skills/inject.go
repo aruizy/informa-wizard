@@ -2,6 +2,7 @@ package skills
 
 import (
 	"fmt"
+	"io/fs"
 	"log"
 	"path/filepath"
 	"strings"
@@ -57,25 +58,50 @@ func Inject(homeDir string, adapter agents.Adapter, skillIDs []model.SkillID) (I
 			continue
 		}
 
-		assetPath := "skills/" + string(id) + "/SKILL.md"
-		content, readErr := assets.Read(assetPath)
-		if readErr != nil {
-			log.Printf("skills: skipping %q — embedded asset not found: %v", id, readErr)
+		assetDir := "skills/" + string(id)
+		if _, statErr := fs.Stat(assets.FS, assetDir); statErr != nil {
+			log.Printf("skills: skipping %q — embedded directory not found: %v", id, statErr)
 			skipped = append(skipped, id)
 			continue
 		}
-		if len(content) == 0 {
-			return InjectionResult{}, fmt.Errorf("skill %q: embedded asset exists but is empty — build may be corrupt", id)
-		}
 
-		path := filepath.Join(skillDir, string(id), "SKILL.md")
-		writeResult, writeErr := filemerge.WriteFileAtomic(path, []byte(content), 0o644)
-		if writeErr != nil {
-			return InjectionResult{}, fmt.Errorf("skill %q: write failed: %w", id, writeErr)
-		}
+		destDir := filepath.Join(skillDir, string(id))
 
-		changed = changed || writeResult.Changed
-		paths = append(paths, path)
+		walkErr := fs.WalkDir(assets.FS, assetDir, func(assetPath string, d fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if d.IsDir() {
+				return nil
+			}
+
+			data, readErr := fs.ReadFile(assets.FS, assetPath)
+			if readErr != nil {
+				return fmt.Errorf("skill %q: read file %q failed: %w", id, assetPath, readErr)
+			}
+			if len(data) == 0 && d.Name() == "SKILL.md" {
+				return fmt.Errorf("skill %q: SKILL.md exists but is empty — build may be corrupt", id)
+			}
+
+			// Compute path relative to assetDir so subdirectory structure is preserved.
+			relPath, relErr := filepath.Rel(assetDir, filepath.FromSlash(assetPath))
+			if relErr != nil {
+				return fmt.Errorf("skill %q: resolve relative path %q failed: %w", id, assetPath, relErr)
+			}
+
+			path := filepath.Join(destDir, relPath)
+			writeResult, writeErr := filemerge.WriteFileAtomic(path, data, 0o644)
+			if writeErr != nil {
+				return fmt.Errorf("skill %q: write %q failed: %w", id, relPath, writeErr)
+			}
+
+			changed = changed || writeResult.Changed
+			paths = append(paths, path)
+			return nil
+		})
+		if walkErr != nil {
+			return InjectionResult{}, walkErr
+		}
 	}
 
 	return InjectionResult{Changed: changed, Files: paths, Skipped: skipped}, nil

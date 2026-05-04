@@ -5,16 +5,20 @@ import (
 	"strings"
 	"testing"
 
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/cli"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/update"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/update/upgrade"
 )
+
+// noPreview is a helper for tests that don't exercise the preview state.
+var noPreview = cli.SyncPreview{}
 
 // ─── RenderUpgradeSync states ──────────────────────────────────────────────
 
 // TestRenderUpgradeSync_ConfirmState verifies the default confirmation screen
 // (not running, no results) shows the two-step description.
 func TestRenderUpgradeSync_ConfirmState(t *testing.T) {
-	out := RenderUpgradeSync(nil, nil, 0, nil, nil, false /*operationRunning*/, true /*updateCheckDone*/, 0, 0)
+	out := RenderUpgradeSync(nil, nil, 0, nil, nil, false /*operationRunning*/, true /*updateCheckDone*/, 0, 0, false, 0, noPreview)
 
 	lower := strings.ToLower(out)
 	// Must mention both operations.
@@ -34,7 +38,7 @@ func TestRenderUpgradeSync_ConfirmState(t *testing.T) {
 // running (operationRunning=true, upgradeReport=nil), the screen shows an
 // "updating" indicator.
 func TestRenderUpgradeSync_RunningUpgradePhase(t *testing.T) {
-	out := RenderUpgradeSync(nil, nil, 0, nil, nil, true /*operationRunning*/, true, 0, 0)
+	out := RenderUpgradeSync(nil, nil, 0, nil, nil, true /*operationRunning*/, true, 0, 0, false, 0, noPreview)
 
 	lower := strings.ToLower(out)
 	if !strings.Contains(lower, "updating") && !strings.Contains(lower, "please wait") {
@@ -52,7 +56,7 @@ func TestRenderUpgradeSync_RunningSyncPhase(t *testing.T) {
 		},
 	}
 
-	out := RenderUpgradeSync(nil, report, 0, nil, nil, true /*operationRunning*/, true, 0, 0)
+	out := RenderUpgradeSync(nil, report, 0, nil, nil, true /*operationRunning*/, true, 0, 0, false, 2, noPreview)
 
 	lower := strings.ToLower(out)
 	// Update done indicator.
@@ -76,7 +80,7 @@ func TestRenderUpgradeSync_CombinedResult(t *testing.T) {
 	}
 	const syncFilesChanged = 3
 
-	out := RenderUpgradeSync(nil, report, syncFilesChanged, nil, nil, false /*operationRunning*/, true, 0, 0)
+	out := RenderUpgradeSync(nil, report, syncFilesChanged, nil, nil, false /*operationRunning*/, true, 0, 0, false, 3, noPreview)
 
 	// Must mention both result sections.
 	if !strings.Contains(out, "Update Results") {
@@ -99,7 +103,7 @@ func TestRenderUpgradeSync_CombinedResultWithSyncError(t *testing.T) {
 	}
 	syncErr := fmt.Errorf("permission denied writing config")
 
-	out := RenderUpgradeSync(nil, report, 0, nil, syncErr, false, true, 0, 0)
+	out := RenderUpgradeSync(nil, report, 0, nil, syncErr, false, true, 0, 0, false, 3, noPreview)
 
 	lower := strings.ToLower(out)
 	if !strings.Contains(lower, "fail") && !strings.Contains(lower, "error") {
@@ -112,13 +116,19 @@ func TestRenderUpgradeSync_CombinedResultWithSyncError(t *testing.T) {
 
 // TestRenderUpgradeSync_CombinedResultWithUpgradeError verifies that an
 // update error is shown in the combined result (upgradeErr != nil, report nil).
+// When no upgrade report exists, the section renders as "Pull Results" with a
+// "Pull failed" prefix, distinguishing the Update+Sync pull-phase failure path
+// from real tool-upgrade failures.
 func TestRenderUpgradeSync_CombinedResultWithUpgradeError(t *testing.T) {
 	upgradeErr := fmt.Errorf("network timeout during upgrade")
 
-	out := RenderUpgradeSync(nil, nil, 2, upgradeErr, nil, false, true, 0, 0)
+	out := RenderUpgradeSync(nil, nil, 2, upgradeErr, nil, false, true, 0, 0, false, 3, noPreview)
 
-	if !strings.Contains(out, "Update Results") {
-		t.Errorf("RenderUpgradeSync(upgradeErr) should show 'Update Results'; got:\n%s", out)
+	if !strings.Contains(out, "Pull Results") {
+		t.Errorf("RenderUpgradeSync(upgradeErr, nil report) should show 'Pull Results'; got:\n%s", out)
+	}
+	if !strings.Contains(out, "Pull failed") {
+		t.Errorf("RenderUpgradeSync(upgradeErr, nil report) should show 'Pull failed' prefix; got:\n%s", out)
 	}
 	if !strings.Contains(out, upgradeErr.Error()) {
 		t.Errorf("RenderUpgradeSync(upgradeErr) should show error text %q; got:\n%s", upgradeErr.Error(), out)
@@ -135,14 +145,15 @@ func TestRenderUpgradeSync_TitleAlwaysPresent(t *testing.T) {
 		report           *upgrade.UpgradeReport
 		operationRunning bool
 		updateCheckDone  bool
+		phase            int
 	}{
-		{"confirm", nil, false, true},
-		{"updating", nil, true, true},
+		{"confirm", nil, false, true, 0},
+		{"updating", nil, true, true, 0},
 	}
 
 	for _, s := range states {
 		t.Run(s.name, func(t *testing.T) {
-			out := RenderUpgradeSync(nil, s.report, 0, nil, nil, s.operationRunning, s.updateCheckDone, 0, 0)
+			out := RenderUpgradeSync(nil, s.report, 0, nil, nil, s.operationRunning, s.updateCheckDone, 0, 0, false, s.phase, noPreview)
 			if !strings.Contains(out, "Update + Sync") {
 				t.Errorf("RenderUpgradeSync state=%q should contain 'Update + Sync'; got:\n%s", s.name, out)
 			}
@@ -154,11 +165,99 @@ func TestRenderUpgradeSync_TitleAlwaysPresent(t *testing.T) {
 // shows immediately without waiting for an update check (updateCheckDone=false).
 func TestRenderUpgradeSync_ConfirmState_NoUpdateCheckWait(t *testing.T) {
 	results := []update.UpdateResult{}
-	out := RenderUpgradeSync(results, nil, 0, nil, nil, false, false /*updateCheckDone=false*/, 0, 0)
+	out := RenderUpgradeSync(results, nil, 0, nil, nil, false, false /*updateCheckDone=false*/, 0, 0, false, 0, noPreview)
 
 	lower := strings.ToLower(out)
 	// Should show the confirmation screen (not a "checking" spinner).
 	if !strings.Contains(lower, "update") {
 		t.Errorf("RenderUpgradeSync(updateCheckDone=false) should show confirm screen; got:\n%s", out)
+	}
+}
+
+// ─── Preview state ──────────────────────────────────────────────────────────
+
+// TestRenderUpgradeSync_PreviewState_Empty verifies that an empty preview
+// (no files would change) shows an appropriate message.
+func TestRenderUpgradeSync_PreviewState_Empty(t *testing.T) {
+	out := RenderUpgradeSync(nil, nil, 0, nil, nil, false, true, 0, 0, false, 1, cli.SyncPreview{})
+
+	lower := strings.ToLower(out)
+	if !strings.Contains(lower, "preview") {
+		t.Errorf("RenderUpgradeSync(preview,empty) should show 'preview'; got:\n%s", out)
+	}
+	if !strings.Contains(lower, "no files") {
+		t.Errorf("RenderUpgradeSync(preview,empty) should mention 'no files'; got:\n%s", out)
+	}
+}
+
+// TestRenderUpgradeSync_PreviewState_WithComponents verifies that a non-empty
+// preview lists the components and shows the correct prompt.
+func TestRenderUpgradeSync_PreviewState_WithComponents(t *testing.T) {
+	preview := cli.SyncPreview{
+		Components: []cli.ComponentPreview{
+			{
+				ID: "sdd",
+				Files: []cli.PreviewFile{
+					{Path: "/home/user/.claude/skills/sdd-init/SKILL.md", New: true},
+					{Path: "/home/user/.claude/agents/sdd-init.md", New: false},
+				},
+				NewFiles:      1,
+				ModifiedFiles: 1,
+			},
+			{
+				ID: "skills",
+				Files: []cli.PreviewFile{
+					{Path: "/home/user/.claude/skills/commitpush/SKILL.md", New: false},
+				},
+				NewFiles:      0,
+				ModifiedFiles: 1,
+			},
+		},
+	}
+
+	out := RenderUpgradeSync(nil, nil, 0, nil, nil, false, true, 0, 0, false, 1, preview)
+
+	lower := strings.ToLower(out)
+	if !strings.Contains(lower, "preview") {
+		t.Errorf("RenderUpgradeSync(preview) should show 'preview'; got:\n%s", out)
+	}
+	if !strings.Contains(out, "sdd") {
+		t.Errorf("RenderUpgradeSync(preview) should list 'sdd' component; got:\n%s", out)
+	}
+	if !strings.Contains(out, "skills") {
+		t.Errorf("RenderUpgradeSync(preview) should list 'skills' component; got:\n%s", out)
+	}
+	if !strings.Contains(lower, "enter") {
+		t.Errorf("RenderUpgradeSync(preview) should show enter prompt; got:\n%s", out)
+	}
+	if !strings.Contains(lower, "esc") {
+		t.Errorf("RenderUpgradeSync(preview) should show esc/cancel prompt; got:\n%s", out)
+	}
+	// Total should be reported.
+	if !strings.Contains(out, "3") {
+		t.Errorf("RenderUpgradeSync(preview) should show total file count; got:\n%s", out)
+	}
+}
+
+// TestRenderUpgradeSync_PreviewState_Truncation verifies that large file lists
+// are truncated to previewMaxFilesPerComponent + "... and N more".
+func TestRenderUpgradeSync_PreviewState_Truncation(t *testing.T) {
+	files := make([]cli.PreviewFile, 10)
+	for i := range files {
+		files[i] = cli.PreviewFile{Path: fmt.Sprintf("/home/user/.claude/skills/sdd-%d/SKILL.md", i), New: false}
+	}
+	preview := cli.SyncPreview{
+		Components: []cli.ComponentPreview{
+			{ID: "sdd", Files: files, ModifiedFiles: 10},
+		},
+	}
+
+	out := RenderUpgradeSync(nil, nil, 0, nil, nil, false, true, 0, 0, false, 1, preview)
+
+	// Should contain truncation message for 10 - previewMaxFilesPerComponent remaining.
+	remaining := 10 - previewMaxFilesPerComponent
+	truncMsg := fmt.Sprintf("and %d more", remaining)
+	if !strings.Contains(out, truncMsg) {
+		t.Errorf("RenderUpgradeSync(preview,truncation) should show %q; got:\n%s", truncMsg, out)
 	}
 }

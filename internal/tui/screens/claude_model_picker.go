@@ -92,6 +92,47 @@ func NewClaudeModelPickerState() ClaudeModelPickerState {
 	}
 }
 
+// NewClaudeModelPickerStateForPreset seeds the picker with the supplied preset
+// so the user enters the screen with their existing choice highlighted.
+// Unknown, empty, OR "custom" preset names fall back to balanced.
+//
+// Note: when the persisted preset is "custom", the per-phase mapping is NOT
+// recoverable from state.json, so we cannot honestly seed the picker in custom
+// mode. Re-entering returns the user to the balanced default; they must re-pick
+// custom assignments if desired.
+func NewClaudeModelPickerStateForPreset(presetName string) ClaudeModelPickerState {
+	preset := ClaudeModelPreset(presetName)
+	if ctor, ok := presetConstructors[preset]; ok {
+		return ClaudeModelPickerState{
+			Preset:            preset,
+			CustomAssignments: ctor(),
+			InCustomMode:      false,
+		}
+	}
+	// Unknown preset name OR ClaudePresetCustom both fall back to balanced.
+	// Custom mode re-entry is not supported because per-phase assignments are
+	// not persisted anywhere recoverable.
+	return NewClaudeModelPickerState()
+}
+
+// IndexOfClaudePreset returns the cursor index for the given preset in the
+// picker's display order. Mirrors NewClaudeModelPickerStateForPreset's fallback:
+// "custom" and unknown presets resolve to balanced (index 0) because the
+// per-phase custom map is not persisted anywhere recoverable, so the picker
+// state lands on balanced — and the cursor must follow to keep them aligned.
+func IndexOfClaudePreset(presetName string) int {
+	preset := ClaudeModelPreset(presetName)
+	if _, isNamedPreset := presetConstructors[preset]; !isNamedPreset {
+		return 0
+	}
+	for i, p := range claudePresetOrder {
+		if p == preset {
+			return i
+		}
+	}
+	return 0
+}
+
 // presetConstructors maps preset IDs to their constructor functions.
 var presetConstructors = map[ClaudeModelPreset]func() map[string]model.ClaudeModelAlias{
 	ClaudePresetBalanced:    model.ClaudeModelPresetBalanced,

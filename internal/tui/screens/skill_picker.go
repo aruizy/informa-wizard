@@ -112,7 +112,7 @@ func RenderSkillPicker(selectedSkills []model.SkillID, cursor int) string {
 	actionOffset := cursor - len(allSkills)
 	b.WriteString(renderOptions(SkillPickerOptions(), actionOffset))
 	b.WriteString("\n")
-	b.WriteString(styles.HelpStyle.Render("j/k: navigate • space/enter: toggle • esc: back"))
+	b.WriteString(styles.HelpStyle.Render("j/k: navigate • space/enter: toggle • a/A: select all/none • esc: back"))
 
 	return b.String()
 }

@@ -3,10 +3,12 @@ package tui
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -22,6 +24,7 @@ import (
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/devskills"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/monday"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/components/sdd"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/logger"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/opencode"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/pipeline"
@@ -98,9 +101,23 @@ type SyncDoneMsg struct {
 // finishes (before the sync phase begins). This enables the intermediate "sync
 // running" state to be displayed.
 type UpgradePhaseCompletedMsg struct {
-	Report         upgrade.UpgradeReport
-	Err            error
-	WizardUpdated  bool // true when informa-wizard repo had new commits after pull
+	Report        upgrade.UpgradeReport
+	Err           error
+	WizardUpdated bool // true when informa-wizard repo had new commits after pull
+}
+
+// PreviewReadyMsg is sent after git pull completes, carrying the computed sync
+// preview so the user can confirm before the actual sync runs.
+//
+// Note: this message intentionally does NOT carry an UpgradeReport. The pull
+// phase before sync is a plain `git pull`, not a tool upgrade — there are no
+// per-tool versions to populate. Err carries any non-fatal pull failures so
+// the UI can warn before showing the preview.
+type PreviewReadyMsg struct {
+	Err     error
+	Preview cli.SyncPreview
+	// WizardUpdated is true when informa-wizard had new commits after pull.
+	WizardUpdated bool
 }
 
 // AgentBuilderGeneratedMsg is sent when the AI generation goroutine completes.
@@ -206,6 +223,9 @@ const (
 	ScreenAgentBuilderInstalling
 	ScreenAgentBuilderComplete
 	ScreenMonday
+	ScreenHealth
+	ScreenUninstall
+	ScreenInstallOverwriteWarn
 )
 
 type Model struct {
@@ -231,11 +251,18 @@ type Model struct {
 	DevSkillChecked   []bool
 	DevSkillCursor    int
 	DevSkillCloneErr  string
+	DevSkillFilter    string
+	DevSkillSearchMode bool
 	DevAgents         []devagents.DiscoveredAgent
 	DevAgentChecked   []bool
 	DevAgentCursor    int
 	DevAgentCloneErr  string
+	DevAgentFilter    string
+	DevAgentSearchMode bool
 	Err               error
+
+	// OverwriteWarnState holds the last install state shown on the warning screen.
+	OverwriteWarnState state.InstallState
 
 	// SelectedBackup holds the manifest chosen on ScreenBackups, used by the
 	// restore confirmation and result screens.
@@ -263,11 +290,32 @@ type Model struct {
 	BackupRenamePos int
 
 	// Monday.com configuration input state.
-	MondayTokenInput   string
-	MondayTokenPos     int
-	MondayBoardInput   string
-	MondayBoardPos     int
-	MondayActiveField  screens.MondayField
+	MondayTokenInput          string
+	MondayTokenPos            int
+	MondayGlobalBoardInput    string
+	MondayGlobalBoardPos      int
+	MondayWorkspaceBoardInput string
+	MondayWorkspaceBoardPos   int
+	MondayActiveField         screens.MondayField
+	// MondayActiveTab is "global" or "workspace" — selects which board input is shown.
+	MondayActiveTab     string
+	MondayValidationErr error
+	// MondayInjectErr captures failures that happen AFTER token validation
+	// passed — specifically MCP injection failures into agent configs. Kept
+	// separate so the screen can use the right prefix when rendering.
+	MondayInjectErr error
+	// MondayDirty is true while the user has unsaved edits in the Monday config.
+	// Reset on Save (Enter) or Discard (Esc).
+	MondayDirty bool
+
+	// Health check state.
+	HealthReport cli.Report
+
+	// Uninstall screen state.
+	UninstallComponents []string // installed components at the time the screen was opened
+	UninstallConfirm    bool     // true when showing the confirmation step
+	UninstallSelected   string   // the component chosen by the user
+	UninstallErr        error    // error from the most recent uninstall attempt
 
 	// ExecuteFn is called to run the real pipeline. When nil, the installing
 	// screen falls back to manual step-through (useful for tests/development).
@@ -322,6 +370,12 @@ type Model struct {
 	// continuing the install flow.
 	ModelConfigMode bool
 
+	// QuickClaudePresetMode is true when ScreenClaudeModelPicker was reached
+	// via the welcome-menu "Switch Claude preset" shortcut. It rides on top of
+	// ModelConfigMode so the save path still triggers a sync, but Esc/back
+	// returns to ScreenWelcome rather than the intermediate ScreenModelConfig.
+	QuickClaudePresetMode bool
+
 	// PendingSyncOverrides holds model assignments selected via the
 	// "Configure Models" shortcut. When non-nil, the next sync run merges
 	// these into the sync selection so the choices are persisted to disk.
@@ -343,6 +397,13 @@ type Model struct {
 	// WizardNeedsRestart is true when the informa-wizard repo had new commits
 	// after git pull, requiring go install + restart to apply the update.
 	WizardNeedsRestart bool
+
+	// UpgradeSyncPhase tracks where we are in the upgrade+sync flow.
+	// 0=pull running, 1=preview (awaiting user confirmation), 2=sync running, 3=done.
+	UpgradeSyncPhase int
+
+	// SyncPreview holds the computed diff preview between pull and sync.
+	SyncPreview cli.SyncPreview
 
 	// UpgradeErr holds the error from the last upgrade run (nil on success).
 	UpgradeErr error
@@ -377,11 +438,12 @@ func NewModel(detection system.DetectionResult, version string) Model {
 	}
 
 	return Model{
-		Screen:        ScreenWelcome,
-		Version:       version,
-		Selection:     selection,
-		Detection:     detection,
-		CommitDate: resolveCommitDate(),
+		Screen:          ScreenWelcome,
+		Version:         version,
+		Selection:       selection,
+		Detection:       detection,
+		MondayActiveTab: "global",
+		CommitDate:      resolveCommitDate(),
 		Progress: NewProgressState([]string{
 			"Install dependencies",
 			"Configure selected agents",
@@ -499,10 +561,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case UpgradePhaseCompletedMsg:
 		// Pull phase done; sync phase is about to start (OperationRunning stays true).
 		m.UpgradeErr = msg.Err
-		// Always set a report so State 3 (results screen) is reached after sync.
-		report := msg.Report
-		m.UpgradeReport = &report
+		// Only assign a report when there's something meaningful to show. A failed
+		// phase carries Err != nil with an empty Results slice; setting UpgradeReport
+		// to a non-nil pointer to an empty struct would mislead the results renderer
+		// (and breaks TestUpgradePhaseCompletedMsg_SetsErrAndKeepsRunning).
+		if len(msg.Report.Results) > 0 {
+			report := msg.Report
+			m.UpgradeReport = &report
+		}
 		m.WizardNeedsRestart = msg.WizardUpdated
+		m.UpdateResults = nil
+		m.UpdateCheckDone = false
+		return m, nil
+	case PreviewReadyMsg:
+		// Pull done + preview computed — pause for user confirmation before sync.
+		// No UpgradeReport is set here: the pull phase is just `git pull`, not a
+		// tool upgrade, so leaving m.UpgradeReport nil prevents the results
+		// renderer from showing an empty "Update Results" section after sync.
+		m.OperationRunning = false
+		m.UpgradeSyncPhase = 1 // preview phase
+		m.UpgradeErr = msg.Err
+		m.WizardNeedsRestart = msg.WizardUpdated
+		m.SyncPreview = msg.Preview
 		m.UpdateResults = nil
 		m.UpdateCheckDone = false
 		return m, nil
@@ -515,6 +595,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.Screen == ScreenProfileCreate && m.ProfileCreateStep == 0 && !m.ProfileEditMode {
 			return m.handleProfileNameInput(msg)
+		}
+		if m.Screen == ScreenDevSkillPicker && m.DevSkillSearchMode {
+			return m.handleDevSkillSearchInput(msg)
+		}
+		if m.Screen == ScreenDevAgentPicker && m.DevAgentSearchMode {
+			return m.handleDevAgentSearchInput(msg)
 		}
 		// Delegate to textarea when on the agent builder prompt screen,
 		// unless the user pressed Esc (to go back) or Tab (to continue).
@@ -617,11 +703,11 @@ func (m Model) findProgressItem(stepID string) int {
 func (m Model) View() string {
 	switch m.Screen {
 	case ScreenWelcome:
-		return screens.RenderWelcome(m.Cursor, m.Version, "", m.hasAgentBuilderEngines(), m.CommitDate)
+		return screens.RenderWelcome(m.Cursor, m.Version, "", m.hasDetectedOpenCode(), len(m.ProfileList), m.hasAgentBuilderEngines(), m.CommitDate)
 	case ScreenUpgrade:
 		return screens.RenderUpgrade(m.UpdateResults, m.UpgradeReport, m.UpgradeErr, m.OperationRunning, m.UpdateCheckDone, m.Cursor, m.SpinnerFrame)
 	case ScreenSync:
-		return screens.RenderSync(m.SyncFilesChanged, m.SyncErr, m.OperationRunning, m.HasSyncRun, m.SpinnerFrame)
+		return screens.RenderSync(m.SyncFilesChanged, m.SyncErr, m.OperationRunning, m.HasSyncRun, m.SpinnerFrame, m.Width)
 	case ScreenModelConfig:
 		return screens.RenderModelConfig(m.Cursor)
 	case ScreenProfiles:
@@ -641,7 +727,7 @@ func (m Model) View() string {
 	case ScreenProfileDelete:
 		return screens.RenderProfileDelete(m.ProfileDeleteTarget, m.Cursor)
 	case ScreenUpgradeSync:
-		return screens.RenderUpgradeSync(m.UpdateResults, m.UpgradeReport, m.SyncFilesChanged, m.UpgradeErr, m.SyncErr, m.OperationRunning, m.UpdateCheckDone, m.Cursor, m.SpinnerFrame, m.WizardNeedsRestart)
+		return screens.RenderUpgradeSync(m.UpdateResults, m.UpgradeReport, m.SyncFilesChanged, m.UpgradeErr, m.SyncErr, m.OperationRunning, m.UpdateCheckDone, m.Cursor, m.SpinnerFrame, m.WizardNeedsRestart, m.UpgradeSyncPhase, m.SyncPreview)
 	case ScreenDetection:
 		return screens.RenderDetection(m.Detection, m.Cursor)
 	case ScreenAgents:
@@ -661,11 +747,24 @@ func (m Model) View() string {
 	case ScreenSkillPicker:
 		return screens.RenderSkillPicker(m.SkillPicker, m.Cursor)
 	case ScreenDevSkillPicker:
-		return screens.RenderDevSkillPicker(m.DevSkills, m.DevSkillChecked, m.Cursor, m.DevSkillCloneErr)
+		return screens.RenderDevSkillPicker(m.DevSkills, m.DevSkillChecked, m.Cursor, m.DevSkillCloneErr, m.DevSkillFilter, m.DevSkillSearchMode)
 	case ScreenDevAgentPicker:
-		return screens.RenderDevAgentPicker(m.DevAgents, m.DevAgentChecked, m.Cursor, m.DevAgentCloneErr)
+		return screens.RenderDevAgentPicker(m.DevAgents, m.DevAgentChecked, m.Cursor, m.DevAgentCloneErr, m.DevAgentFilter, m.DevAgentSearchMode)
+	case ScreenInstallOverwriteWarn:
+		return screens.RenderInstallOverwriteWarn(m.OverwriteWarnState, m.Cursor)
 	case ScreenMonday:
-		return screens.RenderMonday(m.MondayTokenInput, m.MondayBoardInput, m.MondayActiveField, mondayCursorPos(m))
+		return screens.RenderMonday(
+			m.MondayTokenInput,
+			m.MondayGlobalBoardInput,
+			m.MondayWorkspaceBoardInput,
+			m.MondayActiveField,
+			m.MondayActiveTab,
+			m.MondayTokenPos,
+			m.MondayGlobalBoardPos,
+			m.MondayWorkspaceBoardPos,
+			m.MondayValidationErr,
+			m.MondayInjectErr,
+		)
 	case ScreenReview:
 		return screens.RenderReview(m.Review, m.Cursor)
 	case ScreenInstalling:
@@ -712,6 +811,10 @@ func (m Model) View() string {
 		return screens.RenderABInstalling(engineName, m.SpinnerFrame, m.AgentBuilder.InstallErr)
 	case ScreenAgentBuilderComplete:
 		return screens.RenderABComplete(m.AgentBuilder.Generated, m.AgentBuilder.InstallResults)
+	case ScreenHealth:
+		return screens.RenderHealth(m.HealthReport)
+	case ScreenUninstall:
+		return screens.RenderUninstall(m.UninstallComponents, m.Cursor, m.UninstallConfirm, m.UninstallSelected)
 	default:
 		return ""
 	}
@@ -749,11 +852,14 @@ func (m Model) handleKeyPress(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			if updated != nil {
 				m.Selection.ClaudeModelAssignments = updated
+				m.Selection.ClaudeModelPreset = string(m.ClaudeModelPicker.Preset)
 				// In ModelConfigMode, persist model assignments via sync.
 				if m.ModelConfigMode {
 					m.ModelConfigMode = false
+					m.QuickClaudePresetMode = false
 					m.PendingSyncOverrides = &model.SyncOverrides{
 						ClaudeModelAssignments: updated,
+						ClaudeModelPreset:      string(m.ClaudeModelPicker.Preset),
 					}
 					m = m.withResetSyncState()
 					m.setScreen(ScreenSync)
@@ -884,6 +990,65 @@ func (m Model) handleKeyPress(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.toggleCurrentDevAgent()
 		}
 		return m, nil
+	case "/":
+		// Enter search mode on picker screens.
+		switch m.Screen {
+		case ScreenDevSkillPicker:
+			m.DevSkillSearchMode = true
+			m.Cursor = 0
+			return m, nil
+		case ScreenDevAgentPicker:
+			m.DevAgentSearchMode = true
+			m.Cursor = 0
+			return m, nil
+		}
+	case "a":
+		// Select all items (filtered if filter active).
+		switch m.Screen {
+		case ScreenDevSkillPicker:
+			indices := filteredDevSkills(m)
+			for _, i := range indices {
+				if i < len(m.DevSkillChecked) {
+					m.DevSkillChecked[i] = true
+				}
+			}
+			return m, nil
+		case ScreenDevAgentPicker:
+			indices := filteredDevAgents(m)
+			for _, i := range indices {
+				if i < len(m.DevAgentChecked) {
+					m.DevAgentChecked[i] = true
+				}
+			}
+			return m, nil
+		case ScreenSkillPicker:
+			m.SkillPicker = make([]model.SkillID, len(screens.AllSkillsOrdered()))
+			copy(m.SkillPicker, screens.AllSkillsOrdered())
+			return m, nil
+		}
+	case "A":
+		// Deselect all items (filtered if filter active).
+		switch m.Screen {
+		case ScreenDevSkillPicker:
+			indices := filteredDevSkills(m)
+			for _, i := range indices {
+				if i < len(m.DevSkillChecked) {
+					m.DevSkillChecked[i] = false
+				}
+			}
+			return m, nil
+		case ScreenDevAgentPicker:
+			indices := filteredDevAgents(m)
+			for _, i := range indices {
+				if i < len(m.DevAgentChecked) {
+					m.DevAgentChecked[i] = false
+				}
+			}
+			return m, nil
+		case ScreenSkillPicker:
+			m.SkillPicker = nil
+			return m, nil
+		}
 	case "r", "y", "Y":
 		// Restart: rebuild and exit the wizard after an update.
 		if m.Screen == ScreenUpgradeSync && m.WizardNeedsRestart && !m.OperationRunning {
@@ -952,39 +1117,101 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 	case ScreenWelcome:
 		switch m.Cursor {
 		case 0:
+			// "Start installation" — warn if a previous install exists.
+			if home := homeDir(); home != "" {
+				if s, err := state.Read(home); err == nil && len(s.InstalledAgents) > 0 {
+					m.OverwriteWarnState = s
+					m.Cursor = 0
+					m.setScreen(ScreenInstallOverwriteWarn)
+					break
+				}
+			}
 			m.setScreen(ScreenDetection)
 		case 1:
+			// "Update + Sync"
 			m = m.withResetOperationState()
 			m.setScreen(ScreenUpgradeSync)
 		case 2:
 			// "View installation" — read-only summary screen.
 			m.setScreen(ScreenInstallationView)
 		case 3:
-			// "Configure Monday" — load existing config if available.
-			m.loadMondayConfig()
-			m.setScreen(ScreenMonday)
+			// "Uninstall component"
+			m.UninstallConfirm = false
+			m.UninstallSelected = ""
+			m.UninstallErr = nil
+			m.UninstallComponents = m.loadInstalledComponentNames()
+			m.setScreen(ScreenUninstall)
 		case 4:
-			m.setScreen(ScreenModelConfig)
-		case 5:
-			// "Create your own Agent" — blocked when no engines are available.
-			if !m.hasAgentBuilderEngines() {
-				return m, nil
+			// "Health check"
+			homeDir, hdErr := os.UserHomeDir()
+			if hdErr == nil {
+				m.HealthReport, _ = cli.RunHealth(homeDir)
 			}
-			m.AgentBuilder = AgentBuilderState{}
-			m.AgentBuilder.AvailableEngines = m.detectAgentBuilderEngines()
-			ta := textarea.New()
-			ta.Placeholder = "Describe what you want your agent to do..."
-			ta.Focus()
-			ta.SetWidth(60)
-			ta.SetHeight(5)
-			m.AgentBuilder.Textarea = ta
-			m.setScreen(ScreenAgentBuilderEngine)
+			m.setScreen(ScreenHealth)
+		case 5:
+			// "Configure Monday" — load existing config and start at Token field.
+			m.loadMondayConfig()
+			m.MondayActiveField = screens.MondayFieldToken
+			// Default to workspace tab when global is empty and workspace has data.
+			if m.MondayGlobalBoardInput == "" && m.MondayWorkspaceBoardInput != "" {
+				m.MondayActiveTab = "workspace"
+			} else {
+				m.MondayActiveTab = "global"
+			}
+			m.MondayValidationErr = nil
+			m.MondayInjectErr = nil
+			m.setScreen(ScreenMonday)
 		case 6:
-			// "Manage backups"
-			m.setScreen(ScreenBackups)
-		case 7:
-			// "Quit"
-			return m, tea.Quit
+			// "Configure models"
+			m.setScreen(ScreenModelConfig)
+		default:
+			// Cases 0..6 above are stable positions. Everything from cursor 7
+			// onward (Switch Claude preset, Create your own Agent, OpenCode SDD
+			// Profiles, Manage backups, Quit) is dispatched by LABEL so future
+			// menu reordering or insertions don't silently route to wrong actions.
+			opts := screens.WelcomeOptions(m.hasDetectedOpenCode(), len(m.ProfileList), m.hasAgentBuilderEngines())
+			if m.Cursor >= len(opts) {
+				break
+			}
+			label := opts[m.Cursor]
+			switch {
+			case label == "Switch Claude preset":
+				// Shortcut straight to ClaudeModelPicker. Seed the picker with
+				// the currently installed preset so the user enters with their
+				// existing choice highlighted.
+				var currentPreset string
+				if homeDir, hdErr := os.UserHomeDir(); hdErr == nil {
+					if s, err := state.Read(homeDir); err == nil {
+						currentPreset = s.InstalledClaudePreset
+					}
+				}
+				m.ModelConfigMode = true
+				m.QuickClaudePresetMode = true
+				m.ClaudeModelPicker = screens.NewClaudeModelPickerStateForPreset(currentPreset)
+				m.setScreen(ScreenClaudeModelPicker)
+				m.Cursor = screens.IndexOfClaudePreset(currentPreset)
+			case strings.HasPrefix(label, "Create your own Agent"):
+				// Handles both "Create your own Agent" and "Create your own Agent (no agents)".
+				if !m.hasAgentBuilderEngines() {
+					return m, nil
+				}
+				m.AgentBuilder = AgentBuilderState{}
+				m.AgentBuilder.AvailableEngines = m.detectAgentBuilderEngines()
+				ta := textarea.New()
+				ta.Placeholder = "Describe what you want your agent to do..."
+				ta.Focus()
+				ta.SetWidth(60)
+				ta.SetHeight(5)
+				m.AgentBuilder.Textarea = ta
+				m.setScreen(ScreenAgentBuilderEngine)
+			case label == "Manage backups":
+				m.setScreen(ScreenBackups)
+			case label == "Quit":
+				return m, tea.Quit
+			case strings.HasPrefix(label, "OpenCode SDD Profile"):
+				// "OpenCode SDD Profiles" or "OpenCode SDD Profiles (N)"
+				m.setScreen(ScreenProfiles)
+			}
 		}
 	case ScreenUpgrade:
 		// Guard: don't re-launch while running.
@@ -1034,14 +1261,35 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 		if m.WizardNeedsRestart {
 			return m, restartWizardCmd()
 		}
+		// Phase 1: preview shown — user pressed Enter to confirm → run sync.
+		if m.UpgradeSyncPhase == 1 {
+			m.OperationRunning = true
+			m.UpgradeSyncPhase = 2
+			// Send UpgradePhaseCompletedMsg to flip the screen into "syncing" state,
+			// then run the actual sync.
+			report := m.UpgradeReport
+			var upgradeReport upgrade.UpgradeReport
+			if report != nil {
+				upgradeReport = *report
+			}
+			phaseMsg := func() tea.Msg {
+				return UpgradePhaseCompletedMsg{
+					Report:        upgradeReport,
+					Err:           m.UpgradeErr,
+					WizardUpdated: m.WizardNeedsRestart,
+				}
+			}
+			return m, tea.Batch(tickCmd(), tea.Sequence(phaseMsg, m.startSyncAfterPreview()))
+		}
 		// If operations are done, return to welcome.
 		if m.HasSyncRun || m.UpgradeReport != nil || m.UpgradeErr != nil {
 			m = m.withResetOperationState()
+			m.UpgradeSyncPhase = 0
 			m.setScreen(ScreenWelcome)
 			return m, nil
 		}
 
-		// Start upgrade+sync.
+		// Start upgrade+sync (pull → preview).
 		m.OperationRunning = true
 		m.OperationMode = "upgrade-sync"
 		return m, tea.Batch(tickCmd(), m.startUpgradeSync())
@@ -1108,9 +1356,19 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 	case ScreenModelConfig:
 		switch m.Cursor {
 		case 0: // Configure Claude models
+			// Mirror the welcome "Switch Claude preset" shortcut: seed the picker
+			// with the user's currently installed preset so they enter with their
+			// existing choice highlighted instead of always defaulting to balanced.
+			var currentPreset string
+			if homeDir, hdErr := os.UserHomeDir(); hdErr == nil {
+				if s, err := state.Read(homeDir); err == nil {
+					currentPreset = s.InstalledClaudePreset
+				}
+			}
 			m.ModelConfigMode = true
-			m.ClaudeModelPicker = screens.NewClaudeModelPickerState()
+			m.ClaudeModelPicker = screens.NewClaudeModelPickerStateForPreset(currentPreset)
 			m.setScreen(ScreenClaudeModelPicker)
+			m.Cursor = screens.IndexOfClaudePreset(currentPreset)
 		case 1: // Configure OpenCode models
 			m.ModelConfigMode = true
 			cachePath := opencode.DefaultCachePath()
@@ -1478,11 +1736,47 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 		m.goToMondayOrReview()
 		return m, nil
 	case ScreenMonday:
-		// Enter on Monday screen: save inputs, persist to disk, inject MCP, return to welcome.
-		m.Selection.Monday.Token = m.MondayTokenInput
-		m.Selection.Monday.BoardID = m.MondayBoardInput
+		// Enter on Monday screen is handled by handleMondayInput (called earlier in Update).
+		// This branch is a safety fallback — save and return to welcome.
 		m.saveMondayConfig()
 		m.injectMondayMCP()
+		// If MCP injection failed, MondayInjectErr is set; stay on ScreenMonday so
+		// the error is visible (mirrors token-validation error handling).
+		if m.MondayInjectErr != nil {
+			return m, nil
+		}
+		m.setScreen(ScreenWelcome)
+		return m, nil
+	case ScreenHealth:
+		// Enter / any selection on health screen returns to welcome.
+		m.setScreen(ScreenWelcome)
+		return m, nil
+	case ScreenUninstall:
+		if !m.UninstallConfirm {
+			// First step: user selected a component.
+			if m.Cursor < len(m.UninstallComponents) {
+				m.UninstallSelected = m.UninstallComponents[m.Cursor]
+				m.UninstallConfirm = true
+				m.Cursor = 1 // default to "Cancel" for safety
+			}
+			return m, nil
+		}
+		// Second step: confirmation.
+		if m.Cursor == 0 {
+			// "Yes, uninstall"
+			homeDir, hdErr := os.UserHomeDir()
+			if hdErr != nil {
+				m.UninstallErr = hdErr
+				m.setScreen(ScreenWelcome)
+				return m, nil
+			}
+			m.UninstallErr = cli.UninstallComponent(homeDir, model.ComponentID(m.UninstallSelected))
+			m.setScreen(ScreenWelcome)
+			return m, nil
+		}
+		// "Cancel" or any other option
+		m.UninstallConfirm = false
+		m.UninstallSelected = ""
 		m.setScreen(ScreenWelcome)
 		return m, nil
 	case ScreenReview:
@@ -1533,6 +1827,19 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 				m.setScreen(ScreenComplete)
 			}
 		}
+	case ScreenInstallOverwriteWarn:
+		switch m.Cursor {
+		case 0:
+			// "Continue (overwrite)" → proceed to detection.
+			m.setScreen(ScreenDetection)
+		case 1:
+			// "View current installation" → show installation summary.
+			m.setScreen(ScreenInstallationView)
+		case 2:
+			// "Back" → return to welcome.
+			m.setScreen(ScreenWelcome)
+		}
+		return m, nil
 	case ScreenComplete:
 		return m, tea.Quit
 	case ScreenInstallationView:
@@ -1724,6 +2031,8 @@ func (m Model) withResetOperationState() Model {
 	m.OperationRunning = false
 	m.OperationMode = ""
 	m.PendingSyncOverrides = nil
+	m.UpgradeSyncPhase = 0
+	m.SyncPreview = cli.SyncPreview{}
 	m.Cursor = 0
 	return m
 }
@@ -1755,18 +2064,14 @@ func (m Model) startSync(overrides *model.SyncOverrides) tea.Cmd {
 	}
 }
 
-// startUpgradeSync runs git pulls then sync sequentially via tea.Sequence.
+// startUpgradeSync runs git pulls and then computes a sync preview.
 // It pulls informa-wizard (if running from a git clone), dev-skills, and
-// dev-agents repos, then runs sync. Missing repos are skipped silently.
-//
-// The first command runs the git pulls and sends UpgradePhaseCompletedMsg
-// (so the UI can show State 2: sync running). The second command runs sync
-// and sends SyncDoneMsg.
+// dev-agents repos, then computes the diff preview and sends PreviewReadyMsg.
+// The user confirms before the actual sync runs (see startSyncAfterPreview).
 func (m Model) startUpgradeSync() tea.Cmd {
-	syncFn := m.SyncFn
-
-	pullCmd := func() tea.Msg {
+	return func() tea.Msg {
 		wizardUpdated := false
+		var pullErrs []error
 
 		// Pull informa-wizard from the persisted source directory.
 		home := homeDir()
@@ -1783,6 +2088,9 @@ func (m Model) startUpgradeSync() tea.Cmd {
 					logMsg := fmt.Sprintf("pull: before=%s after=%s pullErr=%v updated=%v\n",
 						headBefore, headAfter, pullErr, headBefore != headAfter)
 					_ = os.WriteFile(logPath, []byte(logMsg), 0o644)
+					if pullErr != nil {
+						pullErrs = append(pullErrs, fmt.Errorf("informa-wizard pull: %w", pullErr))
+					}
 					if headBefore != "" && headAfter != "" && headBefore != headAfter {
 						wizardUpdated = true
 					}
@@ -1794,18 +2102,39 @@ func (m Model) startUpgradeSync() tea.Cmd {
 		if home != "" {
 			devSkillsDir := filepath.Join(home, ".informa-wizard", "dev-skills")
 			if _, err := os.Stat(devSkillsDir); err == nil {
-				_ = devskills.Pull(devSkillsDir)
+				if pullErr := devskills.Pull(devSkillsDir); pullErr != nil {
+					pullErrs = append(pullErrs, fmt.Errorf("dev-skills pull: %w", pullErr))
+				}
 			}
 			devAgentsDir := filepath.Join(home, ".informa-wizard", "dev-agents")
 			if _, err := os.Stat(devAgentsDir); err == nil {
-				_ = devagents.Pull(devAgentsDir)
+				if pullErr := devagents.Pull(devAgentsDir); pullErr != nil {
+					pullErrs = append(pullErrs, fmt.Errorf("dev-agents pull: %w", pullErr))
+				}
 			}
 		}
 
-		return UpgradePhaseCompletedMsg{WizardUpdated: wizardUpdated}
-	}
+		// Compute preview of what sync would change.
+		var preview cli.SyncPreview
+		if home != "" {
+			agentIDs := cli.DiscoverAgents(home)
+			selection := cli.BuildSyncSelection(cli.SyncFlags{}, agentIDs, home)
+			preview = cli.ComputeSyncPreview(home, selection)
+		}
 
-	syncCmd := func() tea.Msg {
+		var pullErr error
+		if len(pullErrs) > 0 {
+			pullErr = errors.Join(pullErrs...)
+		}
+		return PreviewReadyMsg{WizardUpdated: wizardUpdated, Preview: preview, Err: pullErr}
+	}
+}
+
+// startSyncAfterPreview launches the sync goroutine after the user confirms
+// the preview. This is the second half of the upgrade+sync flow.
+func (m Model) startSyncAfterPreview() tea.Cmd {
+	syncFn := m.SyncFn
+	return func() tea.Msg {
 		if syncFn == nil {
 			return SyncDoneMsg{Err: fmt.Errorf("sync function not configured")}
 		}
@@ -1815,8 +2144,6 @@ func (m Model) startUpgradeSync() tea.Cmd {
 		filesChanged, err := syncFn(nil)
 		return SyncDoneMsg{FilesChanged: filesChanged, Err: err}
 	}
-
-	return tea.Sequence(pullCmd, syncCmd)
 }
 
 // restoreBackup triggers a backup restore in a goroutine.
@@ -1864,6 +2191,12 @@ func (m Model) goBack() Model {
 		return m
 	}
 
+	// Overwrite warning: Esc goes back to welcome.
+	if m.Screen == ScreenInstallOverwriteWarn {
+		m.setScreen(ScreenWelcome)
+		return m
+	}
+
 	// Agent builder back navigation.
 	switch m.Screen {
 	case ScreenAgentBuilderComplete:
@@ -1891,10 +2224,17 @@ func (m Model) goBack() Model {
 		return m
 	}
 
-	// ModelConfigMode: pickers reached via Model Config shortcut return to ScreenModelConfig.
+	// ModelConfigMode: pickers reached via Model Config shortcut return to ScreenModelConfig,
+	// except when reached via the "Switch Claude preset" welcome shortcut, which returns
+	// directly to ScreenWelcome.
 	if m.ModelConfigMode && (m.Screen == ScreenClaudeModelPicker || m.Screen == ScreenModelPicker) {
 		m.ModelConfigMode = false
-		m.setScreen(ScreenModelConfig)
+		if m.QuickClaudePresetMode {
+			m.QuickClaudePresetMode = false
+			m.setScreen(ScreenWelcome)
+		} else {
+			m.setScreen(ScreenModelConfig)
+		}
 		return m
 	}
 
@@ -2087,6 +2427,22 @@ func (m Model) goBack() Model {
 		m.PendingSyncOverrides = nil
 	}
 
+	// Leaving ScreenUpgradeSync via Esc from the preview phase: reset all
+	// upgrade+sync state so a subsequent visit starts fresh.
+	if m.Screen == ScreenUpgradeSync && m.UpgradeSyncPhase == 1 {
+		m = m.withResetOperationState()
+		m.UpgradeSyncPhase = 0
+	}
+
+	// On the uninstall confirmation step, Esc returns to the component picker
+	// rather than all the way to ScreenWelcome.
+	if m.Screen == ScreenUninstall && m.UninstallConfirm {
+		m.UninstallConfirm = false
+		m.UninstallSelected = ""
+		m.Cursor = 0
+		return m
+	}
+
 	previous, ok := PreviousScreen(m.Screen)
 	if !ok {
 		return m
@@ -2097,6 +2453,15 @@ func (m Model) goBack() Model {
 }
 
 func (m *Model) setScreen(next Screen) {
+	// Clear search/filter state when leaving picker screens.
+	if m.Screen == ScreenDevSkillPicker && next != ScreenDevSkillPicker {
+		m.DevSkillSearchMode = false
+		m.DevSkillFilter = ""
+	}
+	if m.Screen == ScreenDevAgentPicker && next != ScreenDevAgentPicker {
+		m.DevAgentSearchMode = false
+		m.DevAgentFilter = ""
+	}
 	m.PreviousScreen = m.Screen
 	m.Screen = next
 	m.Cursor = 0
@@ -2121,6 +2486,64 @@ func (m *Model) setScreen(next Screen) {
 			m.Cursor = 0
 		}
 	}
+}
+
+// handleDevSkillSearchInput processes key events when DevSkillPicker is in search mode.
+func (m Model) handleDevSkillSearchInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEnter:
+		// Exit search mode, keep filter applied.
+		m.DevSkillSearchMode = false
+		m.Cursor = 0
+		return m, nil
+	case tea.KeyEsc:
+		// Exit search mode and clear filter.
+		m.DevSkillSearchMode = false
+		m.DevSkillFilter = ""
+		m.Cursor = 0
+		return m, nil
+	case tea.KeyBackspace:
+		if len(m.DevSkillFilter) > 0 {
+			runes := []rune(m.DevSkillFilter)
+			m.DevSkillFilter = string(runes[:len(runes)-1])
+			m.Cursor = 0
+		}
+		return m, nil
+	case tea.KeyRunes:
+		m.DevSkillFilter += string(msg.Runes)
+		m.Cursor = 0
+		return m, nil
+	}
+	return m, nil
+}
+
+// handleDevAgentSearchInput processes key events when DevAgentPicker is in search mode.
+func (m Model) handleDevAgentSearchInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEnter:
+		// Exit search mode, keep filter applied.
+		m.DevAgentSearchMode = false
+		m.Cursor = 0
+		return m, nil
+	case tea.KeyEsc:
+		// Exit search mode and clear filter.
+		m.DevAgentSearchMode = false
+		m.DevAgentFilter = ""
+		m.Cursor = 0
+		return m, nil
+	case tea.KeyBackspace:
+		if len(m.DevAgentFilter) > 0 {
+			runes := []rune(m.DevAgentFilter)
+			m.DevAgentFilter = string(runes[:len(runes)-1])
+			m.Cursor = 0
+		}
+		return m, nil
+	case tea.KeyRunes:
+		m.DevAgentFilter += string(msg.Runes)
+		m.Cursor = 0
+		return m, nil
+	}
+	return m, nil
 }
 
 // handleRenameInput processes key events when the rename backup screen is active.
@@ -2173,62 +2596,106 @@ func (m Model) handleRenameInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyEnter:
-		// Save inputs, persist to disk, inject MCP, return to welcome menu.
-		m.Selection.Monday.Token = m.MondayTokenInput
-		m.Selection.Monday.BoardID = m.MondayBoardInput
+		// Validate the token. Network failures are non-fatal (save anyway with warning).
+		// Only an explicit "invalid token" rejection blocks the save.
+		if err := monday.ValidateToken(m.MondayTokenInput); err != nil && !monday.IsNetworkError(err) {
+			m.MondayValidationErr = err
+			return m, nil
+		}
+		m.MondayValidationErr = nil
+		m.MondayInjectErr = nil
+		// Persist to disk and inject MCP, then return to welcome menu.
 		m.saveMondayConfig()
 		m.injectMondayMCP()
+		// If MCP injection failed, MondayInjectErr is set; stay on ScreenMonday so
+		// the error is visible (only ScreenMonday's renderer reads it).
+		if m.MondayInjectErr != nil {
+			return m, nil
+		}
+		m.MondayDirty = false
 		m.setScreen(ScreenWelcome)
 		return m, nil
+
 	case tea.KeyEsc:
+		// Discard unsaved changes: clear in-memory inputs so next entry reloads from disk.
+		m.MondayTokenInput = ""
+		m.MondayGlobalBoardInput = ""
+		m.MondayWorkspaceBoardInput = ""
+		m.MondayTokenPos = 0
+		m.MondayGlobalBoardPos = 0
+		m.MondayWorkspaceBoardPos = 0
+		m.MondayValidationErr = nil
+		m.MondayInjectErr = nil
+		m.MondayDirty = false
 		m.setScreen(ScreenWelcome)
 		return m, nil
+
 	case tea.KeyTab:
-		// Switch between token and board ID fields.
-		if m.MondayActiveField == screens.MondayFieldToken {
-			m.MondayActiveField = screens.MondayFieldBoardID
-		} else {
+		// Cycle: Token → Tabs → Board → Token
+		switch m.MondayActiveField {
+		case screens.MondayFieldToken:
+			m.MondayActiveField = screens.MondayFieldTabs
+		case screens.MondayFieldTabs:
+			m.MondayActiveField = screens.MondayFieldBoard
+		default:
 			m.MondayActiveField = screens.MondayFieldToken
 		}
 		return m, nil
-	case tea.KeyBackspace:
-		if m.MondayActiveField == screens.MondayFieldToken {
-			if m.MondayTokenPos > 0 {
-				runes := []rune(m.MondayTokenInput)
-				m.MondayTokenInput = string(append(runes[:m.MondayTokenPos-1], runes[m.MondayTokenPos:]...))
-				m.MondayTokenPos--
-			}
-		} else {
-			if m.MondayBoardPos > 0 {
-				runes := []rune(m.MondayBoardInput)
-				m.MondayBoardInput = string(append(runes[:m.MondayBoardPos-1], runes[m.MondayBoardPos:]...))
-				m.MondayBoardPos--
-			}
-		}
-		return m, nil
+
 	case tea.KeyLeft:
+		if m.MondayActiveField == screens.MondayFieldTabs {
+			m.MondayActiveTab = "global"
+			return m, nil
+		}
+		// Move cursor left within the active text field.
 		if m.MondayActiveField == screens.MondayFieldToken {
 			if m.MondayTokenPos > 0 {
 				m.MondayTokenPos--
 			}
-		} else {
-			if m.MondayBoardPos > 0 {
-				m.MondayBoardPos--
+		} else if m.MondayActiveField == screens.MondayFieldBoard {
+			if m.MondayActiveTab == "workspace" {
+				if m.MondayWorkspaceBoardPos > 0 {
+					m.MondayWorkspaceBoardPos--
+				}
+			} else {
+				if m.MondayGlobalBoardPos > 0 {
+					m.MondayGlobalBoardPos--
+				}
 			}
 		}
 		return m, nil
+
 	case tea.KeyRight:
+		if m.MondayActiveField == screens.MondayFieldTabs {
+			m.MondayActiveTab = "workspace"
+			return m, nil
+		}
+		// Move cursor right within the active text field.
 		if m.MondayActiveField == screens.MondayFieldToken {
 			if m.MondayTokenPos < len([]rune(m.MondayTokenInput)) {
 				m.MondayTokenPos++
 			}
-		} else {
-			if m.MondayBoardPos < len([]rune(m.MondayBoardInput)) {
-				m.MondayBoardPos++
+		} else if m.MondayActiveField == screens.MondayFieldBoard {
+			if m.MondayActiveTab == "workspace" {
+				if m.MondayWorkspaceBoardPos < len([]rune(m.MondayWorkspaceBoardInput)) {
+					m.MondayWorkspaceBoardPos++
+				}
+			} else {
+				if m.MondayGlobalBoardPos < len([]rune(m.MondayGlobalBoardInput)) {
+					m.MondayGlobalBoardPos++
+				}
 			}
 		}
 		return m, nil
+
 	case tea.KeyRunes:
+		// On the Tabs row, ignore rune input (navigation only).
+		if m.MondayActiveField == screens.MondayFieldTabs {
+			return m, nil
+		}
+		m.MondayValidationErr = nil
+		m.MondayInjectErr = nil
+		m.MondayDirty = true
 		if m.MondayActiveField == screens.MondayFieldToken {
 			runes := []rune(m.MondayTokenInput)
 			newRunes := make([]rune, 0, len(runes)+len(msg.Runes))
@@ -2238,13 +2705,55 @@ func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.MondayTokenInput = string(newRunes)
 			m.MondayTokenPos += len(msg.Runes)
 		} else {
-			runes := []rune(m.MondayBoardInput)
-			newRunes := make([]rune, 0, len(runes)+len(msg.Runes))
-			newRunes = append(newRunes, runes[:m.MondayBoardPos]...)
-			newRunes = append(newRunes, msg.Runes...)
-			newRunes = append(newRunes, runes[m.MondayBoardPos:]...)
-			m.MondayBoardInput = string(newRunes)
-			m.MondayBoardPos += len(msg.Runes)
+			// MondayFieldBoard — write to the active tab's buffer.
+			if m.MondayActiveTab == "workspace" {
+				runes := []rune(m.MondayWorkspaceBoardInput)
+				newRunes := make([]rune, 0, len(runes)+len(msg.Runes))
+				newRunes = append(newRunes, runes[:m.MondayWorkspaceBoardPos]...)
+				newRunes = append(newRunes, msg.Runes...)
+				newRunes = append(newRunes, runes[m.MondayWorkspaceBoardPos:]...)
+				m.MondayWorkspaceBoardInput = string(newRunes)
+				m.MondayWorkspaceBoardPos += len(msg.Runes)
+			} else {
+				runes := []rune(m.MondayGlobalBoardInput)
+				newRunes := make([]rune, 0, len(runes)+len(msg.Runes))
+				newRunes = append(newRunes, runes[:m.MondayGlobalBoardPos]...)
+				newRunes = append(newRunes, msg.Runes...)
+				newRunes = append(newRunes, runes[m.MondayGlobalBoardPos:]...)
+				m.MondayGlobalBoardInput = string(newRunes)
+				m.MondayGlobalBoardPos += len(msg.Runes)
+			}
+		}
+		return m, nil
+
+	case tea.KeyBackspace:
+		// Backspace is a no-op on the Tabs row.
+		if m.MondayActiveField == screens.MondayFieldTabs {
+			return m, nil
+		}
+		m.MondayValidationErr = nil
+		m.MondayInjectErr = nil
+		m.MondayDirty = true
+		if m.MondayActiveField == screens.MondayFieldToken {
+			if m.MondayTokenPos > 0 {
+				runes := []rune(m.MondayTokenInput)
+				m.MondayTokenInput = string(append(runes[:m.MondayTokenPos-1], runes[m.MondayTokenPos:]...))
+				m.MondayTokenPos--
+			}
+		} else {
+			if m.MondayActiveTab == "workspace" {
+				if m.MondayWorkspaceBoardPos > 0 {
+					runes := []rune(m.MondayWorkspaceBoardInput)
+					m.MondayWorkspaceBoardInput = string(append(runes[:m.MondayWorkspaceBoardPos-1], runes[m.MondayWorkspaceBoardPos:]...))
+					m.MondayWorkspaceBoardPos--
+				}
+			} else {
+				if m.MondayGlobalBoardPos > 0 {
+					runes := []rune(m.MondayGlobalBoardInput)
+					m.MondayGlobalBoardInput = string(append(runes[:m.MondayGlobalBoardPos-1], runes[m.MondayGlobalBoardPos:]...))
+					m.MondayGlobalBoardPos--
+				}
+			}
 		}
 		return m, nil
 	}
@@ -2254,7 +2763,14 @@ func (m Model) handleMondayInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) optionCount() int {
 	switch m.Screen {
 	case ScreenWelcome:
-		return len(screens.WelcomeOptions(m.hasAgentBuilderEngines()))
+		return len(screens.WelcomeOptions(m.hasDetectedOpenCode(), len(m.ProfileList), m.hasAgentBuilderEngines()))
+	case ScreenHealth:
+		return 0 // no selectable options; any key returns to welcome
+	case ScreenUninstall:
+		if m.UninstallConfirm {
+			return 2 // "Yes, uninstall" and "Cancel"
+		}
+		return len(m.UninstallComponents)
 	case ScreenUpgrade:
 		if m.UpgradeReport != nil || m.UpgradeErr != nil {
 			return 1 // "return" option in results/error state
@@ -2294,9 +2810,17 @@ func (m Model) optionCount() int {
 	case ScreenSkillPicker:
 		return screens.SkillPickerOptionCount()
 	case ScreenDevSkillPicker:
+		if m.DevSkillSearchMode || m.DevSkillFilter != "" {
+			return len(filteredDevSkills(m))
+		}
 		return len(m.DevSkills)
 	case ScreenDevAgentPicker:
+		if m.DevAgentSearchMode || m.DevAgentFilter != "" {
+			return len(filteredDevAgents(m))
+		}
 		return len(m.DevAgents)
+	case ScreenInstallOverwriteWarn:
+		return 3 // Continue, View current installation, Back
 	case ScreenMonday:
 		return 0 // text input mode — no cursor navigation
 	case ScreenReview:
@@ -2401,7 +2925,19 @@ func (m *Model) toggleCurrentSkill() {
 }
 
 // toggleCurrentDevSkill toggles the checked state of the dev skill at the current cursor position.
+// When a filter is active, the cursor is relative to the filtered list.
 func (m *Model) toggleCurrentDevSkill() {
+	if m.DevSkillFilter != "" || m.DevSkillSearchMode {
+		indices := filteredDevSkills(*m)
+		if m.Cursor < 0 || m.Cursor >= len(indices) {
+			return
+		}
+		realIdx := indices[m.Cursor]
+		if realIdx < len(m.DevSkillChecked) {
+			m.DevSkillChecked[realIdx] = !m.DevSkillChecked[realIdx]
+		}
+		return
+	}
 	if m.Cursor < 0 || m.Cursor >= len(m.DevSkills) {
 		return
 	}
@@ -2411,13 +2947,69 @@ func (m *Model) toggleCurrentDevSkill() {
 }
 
 // toggleCurrentDevAgent toggles the checked state of the dev agent at the current cursor position.
+// When a filter is active, the cursor is relative to the filtered list.
 func (m *Model) toggleCurrentDevAgent() {
+	if m.DevAgentFilter != "" || m.DevAgentSearchMode {
+		indices := filteredDevAgents(*m)
+		if m.Cursor < 0 || m.Cursor >= len(indices) {
+			return
+		}
+		realIdx := indices[m.Cursor]
+		if realIdx < len(m.DevAgentChecked) {
+			m.DevAgentChecked[realIdx] = !m.DevAgentChecked[realIdx]
+		}
+		return
+	}
 	if m.Cursor < 0 || m.Cursor >= len(m.DevAgents) {
 		return
 	}
 	if m.Cursor < len(m.DevAgentChecked) {
 		m.DevAgentChecked[m.Cursor] = !m.DevAgentChecked[m.Cursor]
 	}
+}
+
+// filteredDevSkills returns the real indices of dev skills that match the current filter.
+// When no filter is active, returns all indices.
+func filteredDevSkills(m Model) []int {
+	if m.DevSkillFilter == "" {
+		indices := make([]int, len(m.DevSkills))
+		for i := range m.DevSkills {
+			indices[i] = i
+		}
+		return indices
+	}
+	query := strings.ToLower(m.DevSkillFilter)
+	var indices []int
+	for i, s := range m.DevSkills {
+		if strings.Contains(strings.ToLower(s.Name), query) ||
+			strings.Contains(strings.ToLower(s.ID), query) ||
+			strings.Contains(strings.ToLower(s.Description), query) {
+			indices = append(indices, i)
+		}
+	}
+	return indices
+}
+
+// filteredDevAgents returns the real indices of dev agents that match the current filter.
+// When no filter is active, returns all indices.
+func filteredDevAgents(m Model) []int {
+	if m.DevAgentFilter == "" {
+		indices := make([]int, len(m.DevAgents))
+		for i := range m.DevAgents {
+			indices[i] = i
+		}
+		return indices
+	}
+	query := strings.ToLower(m.DevAgentFilter)
+	var indices []int
+	for i, a := range m.DevAgents {
+		if strings.Contains(strings.ToLower(a.Name), query) ||
+			strings.Contains(strings.ToLower(a.ID), query) ||
+			strings.Contains(strings.ToLower(a.Description), query) {
+			indices = append(indices, i)
+		}
+	}
+	return indices
 }
 
 // initSkillPicker pre-selects ALL available skills (custom mode default).
@@ -2589,6 +3181,20 @@ func extractAvailableUpdates(results []update.UpdateResult) []screens.UpdateInfo
 	return updates
 }
 
+// loadInstalledComponentNames returns the list of installed component names from
+// state.json. Returns nil if state.json cannot be read.
+func (m Model) loadInstalledComponentNames() []string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	st, err := state.Read(homeDir)
+	if err != nil {
+		return nil
+	}
+	return st.InstalledComponents
+}
+
 // hasDetectedOpenCode returns true if OpenCode config directory was detected.
 func (m Model) hasDetectedOpenCode() bool {
 	for _, cfg := range m.Detection.Configs {
@@ -2656,11 +3262,20 @@ func (m *Model) goToMondayOrReview() {
 	m.setScreen(ScreenReview)
 }
 
+// mondayCursorPos is retained for potential future use but the new RenderMonday
+// signature accepts per-field positions directly, so this helper is no longer
+// called in the View path. Keeping it avoids a "declared and not used" error.
 func mondayCursorPos(m Model) int {
-	if m.MondayActiveField == screens.MondayFieldToken {
+	switch m.MondayActiveField {
+	case screens.MondayFieldToken:
 		return m.MondayTokenPos
+	case screens.MondayFieldBoard:
+		if m.MondayActiveTab == "workspace" {
+			return m.MondayWorkspaceBoardPos
+		}
+		return m.MondayGlobalBoardPos
 	}
-	return m.MondayBoardPos
+	return 0
 }
 
 type mondayJSON struct {
@@ -2676,10 +3291,17 @@ func mondayConfigPath() string {
 	return filepath.Join(home, ".informa-wizard", "monday.json")
 }
 
+func mondayWorkspaceConfigPath() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(cwd, ".informa-wizard", "monday.json")
+}
+
 func (m *Model) loadMondayConfig() {
-	// Try monday.json first.
-	path := mondayConfigPath()
-	if path != "" {
+	// Load global config.
+	if path := mondayConfigPath(); path != "" {
 		if data, err := os.ReadFile(path); err == nil {
 			var cfg mondayJSON
 			if json.Unmarshal(data, &cfg) == nil {
@@ -2687,12 +3309,27 @@ func (m *Model) loadMondayConfig() {
 					m.MondayTokenInput = cfg.Token
 					m.MondayTokenPos = len([]rune(cfg.Token))
 				}
-				if cfg.BoardID != "" && m.MondayBoardInput == "" {
-					m.MondayBoardInput = cfg.BoardID
-					m.MondayBoardPos = len([]rune(cfg.BoardID))
+				if cfg.BoardID != "" {
+					m.MondayGlobalBoardInput = cfg.BoardID
+					m.MondayGlobalBoardPos = len([]rune(cfg.BoardID))
 				}
-				if m.MondayTokenInput != "" {
-					return
+			}
+		}
+	}
+
+	// Load workspace config (board only; token falls back to global).
+	if wsPath := mondayWorkspaceConfigPath(); wsPath != "" {
+		if data, err := os.ReadFile(wsPath); err == nil {
+			var cfg mondayJSON
+			if json.Unmarshal(data, &cfg) == nil {
+				if cfg.BoardID != "" {
+					m.MondayWorkspaceBoardInput = cfg.BoardID
+					m.MondayWorkspaceBoardPos = len([]rune(cfg.BoardID))
+				}
+				// Edge case: workspace has a token but global doesn't.
+				if cfg.Token != "" && m.MondayTokenInput == "" {
+					m.MondayTokenInput = cfg.Token
+					m.MondayTokenPos = len([]rune(cfg.Token))
 				}
 			}
 		}
@@ -2721,39 +3358,79 @@ func (m *Model) loadMondayConfig() {
 	}
 }
 
-func (m Model) injectMondayMCP() {
+func (m *Model) injectMondayMCP() {
 	if m.MondayTokenInput == "" {
 		return
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
+		m.MondayInjectErr = fmt.Errorf("resolve user home dir: %w", err)
 		return
 	}
-	cfg := model.MondayConfig{Token: m.MondayTokenInput, BoardID: m.MondayBoardInput}
+	// Use the effective board ID: workspace overrides global when set.
+	effectiveBoard := m.MondayGlobalBoardInput
+	if m.MondayWorkspaceBoardInput != "" {
+		effectiveBoard = m.MondayWorkspaceBoardInput
+	}
+	cfg := model.MondayConfig{Token: m.MondayTokenInput, BoardID: effectiveBoard}
 	// Inject MCP for all installed agents (read from state).
 	agentIDs := cli.DiscoverAgents(home)
 	reg, regErr := agents.NewDefaultRegistry()
 	if regErr != nil {
+		m.MondayInjectErr = fmt.Errorf("build agent registry: %w", regErr)
 		return
 	}
+	var injectErrs []error
 	for _, agentID := range agentIDs {
 		adapter, ok := reg.Get(agentID)
 		if !ok {
 			continue
 		}
-		_, _ = monday.Inject(home, adapter, cfg)
+		if _, err := monday.Inject(home, adapter, cfg); err != nil {
+			injectErrs = append(injectErrs, fmt.Errorf("%s: %w", agentID, err))
+		}
+	}
+	if len(injectErrs) > 0 {
+		m.MondayInjectErr = fmt.Errorf("monday MCP injection: %w", errors.Join(injectErrs...))
 	}
 }
 
 func (m Model) saveMondayConfig() {
-	path := mondayConfigPath()
-	if path == "" {
+	// Write global config when token or global board is present.
+	// Mode 0o600: monday.json contains an API token — sensitive content.
+	if m.MondayTokenInput != "" || m.MondayGlobalBoardInput != "" {
+		if path := mondayConfigPath(); path != "" {
+			_ = os.MkdirAll(filepath.Dir(path), 0o755)
+			cfg := mondayJSON{Token: m.MondayTokenInput, BoardID: m.MondayGlobalBoardInput}
+			data, _ := json.MarshalIndent(cfg, "", "  ")
+			_ = os.WriteFile(path, append(data, '\n'), 0o600)
+			// os.WriteFile preserves the existing inode mode when the file already
+			// exists. Older versions wrote 0o644; force-tighten to 0o600 to ensure
+			// the API token is never readable by other users.
+			if err := os.Chmod(path, 0o600); err != nil && runtime.GOOS != "windows" {
+				logger.Warn("failed to tighten %s permissions: %v", path, err)
+			}
+		}
+	}
+
+	// Write or delete the workspace config depending on whether the board is set.
+	wsPath := mondayWorkspaceConfigPath()
+	if wsPath == "" {
 		return
 	}
-	_ = os.MkdirAll(filepath.Dir(path), 0o755)
-	cfg := mondayJSON{Token: m.MondayTokenInput, BoardID: m.MondayBoardInput}
-	data, _ := json.MarshalIndent(cfg, "", "  ")
-	_ = os.WriteFile(path, append(data, '\n'), 0o644)
+	if m.MondayWorkspaceBoardInput != "" {
+		_ = os.MkdirAll(filepath.Dir(wsPath), 0o755)
+		cfg := mondayJSON{Token: m.MondayTokenInput, BoardID: m.MondayWorkspaceBoardInput}
+		data, _ := json.MarshalIndent(cfg, "", "  ")
+		_ = os.WriteFile(wsPath, append(data, '\n'), 0o600)
+		// Force the mode in case an older version created the file with 0o644.
+		if err := os.Chmod(wsPath, 0o600); err != nil && runtime.GOOS != "windows" {
+			logger.Warn("failed to tighten %s permissions: %v", wsPath, err)
+		}
+	} else {
+		// User explicitly cleared the workspace board — remove the file.
+		_ = os.Remove(wsPath)
+	}
 }
 
 // buildInstallationViewData reads state.json and the dev-skills/dev-agents/monday
@@ -2773,11 +3450,24 @@ func (m Model) buildInstallationViewData() screens.InstallationViewData {
 	if cfg, err := devagents.ReadConfig(home); err == nil {
 		data.DevAgents = cfg.InstalledAgents
 	}
+	// Global Monday config.
 	if mondayData, err := os.ReadFile(filepath.Join(home, ".informa-wizard", "monday.json")); err == nil {
 		var mc mondayJSON
 		if json.Unmarshal(mondayData, &mc) == nil {
-			data.MondayToken = mc.Token
-			data.MondayBoard = mc.BoardID
+			data.GlobalMondayToken = mc.Token
+			data.GlobalMondayBoard = mc.BoardID
+		}
+	}
+	// Workspace Monday config (current working directory).
+	if cwd, err := os.Getwd(); err == nil {
+		data.WorkspacePath = cwd
+		wsPath := filepath.Join(cwd, ".informa-wizard", "monday.json")
+		if mondayData, err := os.ReadFile(wsPath); err == nil {
+			var mc mondayJSON
+			if json.Unmarshal(mondayData, &mc) == nil {
+				data.WorkspaceMondayToken = mc.Token
+				data.WorkspaceMondayBoard = mc.BoardID
+			}
 		}
 	}
 	return data
@@ -3102,6 +3792,17 @@ func restartWizardCmd() tea.Cmd {
 			return SyncDoneMsg{Err: fmt.Errorf("cannot find wizard source dir: %w", err)}
 		}
 		repoDir := strings.TrimSpace(string(data))
+
+		// On Windows, `go install` cannot replace the running .exe — the file is
+		// locked while the wizard is still executing. Surface a manual instruction
+		// so the user can rebuild after closing the wizard themselves.
+		if runtime.GOOS == "windows" {
+			return SyncDoneMsg{Err: fmt.Errorf(
+				"on Windows the wizard binary cannot be self-replaced while running; "+
+					"close this wizard and run: go install ./cmd/informa-wizard (from %s)",
+				repoDir,
+			)}
+		}
 
 		// Rebuild the binary.
 		goInstall := exec.Command("go", "install", "./cmd/informa-wizard")

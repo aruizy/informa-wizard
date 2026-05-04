@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/backup"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/cli"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/lock"
+	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/logger"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/model"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/pipeline"
 	"gitlab.informa.tools/ai/wizard/informa-wizard/internal/planner"
@@ -30,6 +33,10 @@ var (
 	updateCheckAll      = update.CheckAll
 	updateCheckFiltered = update.CheckFiltered
 	upgradeExecute      = upgrade.Execute
+
+	// lockAcquireFn is the lock acquisition function.
+	// Tests can replace this with a no-op to avoid using the real user home directory.
+	lockAcquireFn = lock.Acquire
 )
 
 func Run() error {
@@ -58,6 +65,31 @@ func RunArgs(args []string, stdout io.Writer) error {
 		return err
 	}
 
+	// Determine the home directory once; used for lock, logger, and TUI.
+	// On failure we continue without locking/logging (non-fatal for these subsystems).
+	homeDir, homeDirErr := os.UserHomeDir()
+
+	// Persistent logging: open ~/.informa-wizard/logs/wizard.log in append mode.
+	// Errors are silently ignored so logging never blocks the user.
+	if homeDirErr == nil {
+		_ = logger.Init(homeDir)
+		defer func() { _ = logger.Close() }()
+	}
+
+	// Lock: prevent two simultaneous wizard instances from stepping on each other.
+	// Read-only commands (status, doctor, help, version) bypass the lock.
+	// If home dir is unavailable, we skip the lock entirely (graceful degradation).
+	isReadOnly := len(args) > 0 && (args[0] == "status" || args[0] == "doctor")
+	if homeDirErr == nil && !isReadOnly {
+		lk, lockErr := lockAcquireFn(homeDir)
+		if lockErr != nil {
+			// main() prints returned errors to stderr — let it surface this one
+			// rather than printing here AND returning a wrapped error.
+			return lockErr
+		}
+		defer func() { _ = lk.Release() }()
+	}
+
 	result, err := system.Detect(context.Background())
 	if err != nil {
 		return fmt.Errorf("detect system: %w", err)
@@ -75,9 +107,8 @@ func RunArgs(args []string, stdout io.Writer) error {
 	}
 
 	if len(args) == 0 {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("resolve user home directory: %w", err)
+		if homeDirErr != nil {
+			return fmt.Errorf("resolve user home directory: %w", homeDirErr)
 		}
 
 		m := tui.NewModel(result, Version)
@@ -97,7 +128,7 @@ func RunArgs(args []string, stdout io.Writer) error {
 		m.UpgradeFn = tuiUpgrade(profile, homeDir)
 		m.SyncFn = tuiSync(homeDir)
 		p := tea.NewProgram(m, tea.WithAltScreen())
-		_, err = p.Run()
+		_, err := p.Run()
 		return err
 	}
 
@@ -108,25 +139,42 @@ func RunArgs(args []string, stdout io.Writer) error {
 	case "upgrade":
 		return runUpgrade(context.Background(), args[1:], result, stdout)
 	case "install":
+		logger.Info("install start: args=%v", args[1:])
 		installResult, err := cli.RunInstall(args[1:], result)
 		if err != nil {
+			logger.Error("install failed: %v", err)
 			return err
 		}
 
 		if installResult.DryRun {
 			_, _ = fmt.Fprintln(stdout, cli.RenderDryRun(installResult))
 		} else {
+			logger.Info("install complete: agents=%v components=%v", installResult.Selection.Agents, installResult.Selection.Components)
 			_, _ = fmt.Fprint(stdout, verify.RenderReport(installResult.Verify))
 		}
 
 		return nil
 	case "sync":
+		logger.Info("sync start: args=%v", args[1:])
 		syncResult, err := cli.RunSync(args[1:])
 		if err != nil {
+			logger.Error("sync failed: %v", err)
 			return err
 		}
 
+		logger.Info("sync complete: filesChanged=%d", syncResult.FilesChanged)
 		_, _ = fmt.Fprintln(stdout, cli.RenderSyncReport(syncResult))
+		return nil
+	case "status":
+		if homeDirErr != nil {
+			return fmt.Errorf("resolve user home directory: %w", homeDirErr)
+		}
+		return cli.RunStatus(homeDir)
+	case "doctor":
+		if homeDirErr != nil {
+			return fmt.Errorf("resolve user home directory: %w", homeDirErr)
+		}
+		cli.RunHealthCLI(homeDir)
 		return nil
 	case "restore":
 		return cli.RunRestore(args[1:], stdout)
@@ -250,7 +298,7 @@ func tuiExecute(
 			skillIDs = append(skillIDs, string(s))
 		}
 		// Non-fatal: a state write failure must not break an otherwise successful install.
-		_ = state.Write(homeDir, agentIDs, componentIDs, skillIDs, string(selection.Preset))
+		_ = state.Write(homeDir, agentIDs, componentIDs, skillIDs, string(selection.Preset), string(selection.ClaudeModelPreset))
 
 		// Persist source repo dir for Update+Sync.
 		if wd, wdErr := os.Getwd(); wdErr == nil {
@@ -288,17 +336,65 @@ func tuiUpgrade(profile system.PlatformProfile, homeDir string) tui.UpgradeFunc 
 // so that the "Configure Models" TUI flow persists its choices to disk.
 func tuiSync(homeDir string) tui.SyncFunc {
 	return func(overrides *model.SyncOverrides) (int, error) {
+		presetForLog := ""
+		if overrides != nil {
+			presetForLog = overrides.ClaudeModelPreset
+		}
+		logger.Info("tui sync start: claude_preset_override=%q", presetForLog)
+
 		agentIDs := cli.DiscoverAgents(homeDir)
 		selection := cli.BuildSyncSelection(cli.SyncFlags{}, agentIDs, homeDir)
 
 		applyOverrides(&selection, overrides)
 
 		result, err := cli.RunSyncWithSelection(homeDir, selection)
+		// Persist Claude preset to state.json only when the pipeline actually
+		// wrote files reflecting the new preset. RunSyncWithSelection enforces
+		// `FilesChanged == 0 ⇒ NoOp == true` on success (sync.go:812), so this
+		// single condition correctly excludes both NoOp paths and partial-failure
+		// paths where rollback left no files written.
+		shouldPersist := overrides != nil && overrides.ClaudeModelPreset != "" && result.FilesChanged > 0
+		if shouldPersist {
+			logger.Info("tui sync persisting claude preset: %s (sync err=%v)", overrides.ClaudeModelPreset, err)
+			persistClaudePreset(homeDir, overrides.ClaudeModelPreset)
+		}
 		if err != nil {
-			return 0, err
+			logger.Error("tui sync RunSyncWithSelection failed: %v", err)
+			return result.FilesChanged, err
 		}
 		return result.FilesChanged, nil
 	}
+}
+
+// persistClaudePreset rewrites state.json with the new Claude preset, leaving
+// all other fields untouched. Read errors are handled defensively:
+//   - state.json missing → write a fresh state with just the preset (install repopulates).
+//   - state.json exists but failed to read/validate → DO NOT overwrite; preserve existing data on disk.
+func persistClaudePreset(homeDir, preset string) {
+	s, err := state.Read(homeDir)
+	if err != nil {
+		// If state.json exists but failed to read/validate, refuse to overwrite —
+		// otherwise we'd wipe the user's installed agents/components/skills metadata.
+		if !errors.Is(err, fs.ErrNotExist) && !os.IsNotExist(err) {
+			logger.Warn("persistClaudePreset: state.Read failed (%v); refusing to overwrite existing state.json", err)
+			return
+		}
+		logger.Info("persistClaudePreset: state.json not found; writing fresh state with preset only")
+		s = state.InstallState{}
+	}
+	logger.Info("persistClaudePreset: writing state.json with claude_preset=%s (was %s)", preset, s.InstalledClaudePreset)
+	if writeErr := state.Write(
+		homeDir,
+		s.InstalledAgents,
+		s.InstalledComponents,
+		s.InstalledSkills,
+		s.InstalledPreset,
+		preset,
+	); writeErr != nil {
+		logger.Warn("failed to persist Claude preset to state.json: %v", writeErr)
+		return
+	}
+	logger.Info("persistClaudePreset: wrote state.json successfully")
 }
 
 // applyOverrides merges non-nil fields from overrides into selection.
@@ -312,6 +408,9 @@ func applyOverrides(selection *model.Selection, overrides *model.SyncOverrides) 
 	}
 	if overrides.ClaudeModelAssignments != nil {
 		selection.ClaudeModelAssignments = overrides.ClaudeModelAssignments
+	}
+	if overrides.ClaudeModelPreset != "" {
+		selection.ClaudeModelPreset = overrides.ClaudeModelPreset
 	}
 	if overrides.SDDMode != "" {
 		selection.SDDMode = overrides.SDDMode
